@@ -52,6 +52,7 @@ func main() {
 	userRepo := repository.NewUserRepository(dbPool)
 	templateRepo := repository.NewTemplateRepository(dbPool)
 	transaksiRepo := repository.NewTransaksiRepository(dbPool)
+	dokumenRepo := repository.NewDokumenRepository(dbPool)
 	profilRepo := repository.NewProfilRepository(dbPool)
 	menuRepo := repository.NewMenuRepository(dbPool)
 	kontenRepo := repository.NewKontenRepository(dbPool)
@@ -68,7 +69,11 @@ func main() {
 	storageService := service.NewStorageService(cfg)
 	syncService := service.NewSyncService(transaksiRepo, schemaCache, cfg)
 	transaksiService := service.NewTransaksiService(transaksiRepo, cfg)
+	pdfService := service.NewPDFService(dokumenRepo, transaksiRepo, templateRepo, profilRepo, userRepo, cfg)
 	cmsService := service.NewCMSService(profilRepo, menuRepo, kontenRepo, cfg)
+
+	// Start Gotenberg PDF Worker (Single concurrent worker pool)
+	pdfService.StartWorker(ctx)
 
 	// 4. Initialize Router
 	router := handler.NewRouter(handler.RouterParams{
@@ -77,6 +82,7 @@ func main() {
 		StorageService:   storageService,
 		SyncService:      syncService,
 		TransaksiService: transaksiService,
+		PDFService:       pdfService,
 		CMSService:       cmsService,
 		TemplateHandler:  handler.NewTemplateHandler(templateRepo),
 	})

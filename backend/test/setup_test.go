@@ -59,6 +59,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	userRepo := repository.NewUserRepository(dbPool)
 	templateRepo := repository.NewTemplateRepository(dbPool)
 	transaksiRepo := repository.NewTransaksiRepository(dbPool)
+	dokumenRepo := repository.NewDokumenRepository(dbPool)
 	profilRepo := repository.NewProfilRepository(dbPool)
 	menuRepo := repository.NewMenuRepository(dbPool)
 	kontenRepo := repository.NewKontenRepository(dbPool)
@@ -72,7 +73,12 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	storageService := service.NewStorageService(cfg)
 	syncService := service.NewSyncService(transaksiRepo, schemaCache, cfg)
 	transaksiService := service.NewTransaksiService(transaksiRepo, cfg)
+	pdfService := service.NewPDFService(dokumenRepo, transaksiRepo, templateRepo, profilRepo, userRepo, cfg)
 	cmsService := service.NewCMSService(profilRepo, menuRepo, kontenRepo, cfg)
+
+	// Start worker with dedicated context cancelled on test cleanup
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	pdfService.StartWorker(workerCtx)
 
 	router := handler.NewRouter(handler.RouterParams{
 		Config:           cfg,
@@ -80,6 +86,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		StorageService:   storageService,
 		SyncService:      syncService,
 		TransaksiService: transaksiService,
+		PDFService:       pdfService,
 		CMSService:       cmsService,
 		TemplateHandler:  handler.NewTemplateHandler(templateRepo),
 	})
@@ -87,8 +94,8 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	ts := httptest.NewServer(router)
 
 	// Clean test transactions created during test runs & reset singleton profil
-	_, _ = dbPool.Exec(ctx, "DELETE FROM transaksi_pelayanan WHERE warga_nik LIKE '320599%' OR warga_nik LIKE '32050199%' OR warga_nik LIKE '32050177%' OR warga_nik LIKE '32050166%'")
-	_, _ = dbPool.Exec(ctx, `
+	_, _ = dbPool.Exec(context.Background(), "DELETE FROM transaksi_pelayanan WHERE warga_nik LIKE '320599%' OR warga_nik LIKE '32050199%' OR warga_nik LIKE '32050177%' OR warga_nik LIKE '32050166%'")
+	_, _ = dbPool.Exec(context.Background(), `
 		UPDATE profil_wilayah
 		SET nama_kelurahan = 'Sukanegla',
 		    kecamatan = 'Garut Kota',
@@ -99,6 +106,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	`)
 
 	t.Cleanup(func() {
+		workerCancel()
 		ts.Close()
 		_, _ = dbPool.Exec(context.Background(), "DELETE FROM transaksi_pelayanan WHERE warga_nik LIKE '320599%' OR warga_nik LIKE '32050199%' OR warga_nik LIKE '32050177%' OR warga_nik LIKE '32050166%'")
 		_, _ = dbPool.Exec(context.Background(), `

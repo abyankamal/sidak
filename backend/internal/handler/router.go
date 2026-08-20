@@ -17,6 +17,7 @@ type RouterParams struct {
 	StorageService   *service.StorageService
 	SyncService      *service.SyncService
 	TransaksiService *service.TransaksiService
+	PDFService       *service.PDFService
 	CMSService       *service.CMSService
 	TemplateHandler  *TemplateHandler
 }
@@ -49,6 +50,7 @@ func NewRouter(p RouterParams) http.Handler {
 	storageHandler := NewStorageHandler(p.StorageService)
 	syncHandler := NewSyncHandler(p.SyncService)
 	transaksiHandler := NewTransaksiHandler(p.TransaksiService)
+	pdfHandler := NewPDFHandler(p.PDFService)
 	cmsPublicHandler := NewCMSPublicHandler(p.CMSService)
 	cmsAdminHandler := NewCMSAdminHandler(p.CMSService)
 
@@ -93,24 +95,12 @@ func NewRouter(p RouterParams) http.Handler {
 		})
 
 		// ---------------------------------------------------------------------
-		// 5. DOKUMEN & PDF (Stubs for Fase 2)
+		// 5. DOKUMEN & PDF ENGINE
 		// ---------------------------------------------------------------------
 		v1.Group(func(doc chi.Router) {
 			doc.Use(middleware.AuthMiddleware(p.AuthService))
-			doc.Post("/layanan/{id}/generate-pdf", func(w http.ResponseWriter, r *http.Request) {
-				id := chi.URLParam(r, "id")
-				JSON(w, http.StatusAccepted, map[string]any{
-					"job_id": id,
-					"status": "PROCESSING",
-				})
-			})
-			doc.Get("/dokumen/{id}/status", func(w http.ResponseWriter, r *http.Request) {
-				id := chi.URLParam(r, "id")
-				JSON(w, http.StatusOK, map[string]any{
-					"dokumen_id": id,
-					"status":     "PROCESSING",
-				})
-			})
+			doc.Post("/layanan/{id}/generate-pdf", pdfHandler.GeneratePDF)
+			doc.Get("/dokumen/{id}/status", pdfHandler.GetStatus)
 		})
 
 		// ---------------------------------------------------------------------
