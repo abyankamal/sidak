@@ -3,20 +3,20 @@ package domain
 import "time"
 
 type KontenPublik struct {
-	ID             string     `json:"id"`
-	Tipe           string     `json:"tipe"`
-	Judul          string     `json:"judul"`
-	Slug           string     `json:"slug"`
-	Ringkasan      string     `json:"ringkasan"`
-	IsiKonten      string     `json:"isi_konten"`
-	ThumbnailR2Key *string    `json:"thumbnail_r2_key,omitempty"`
-	ThumbnailURL   *string    `json:"thumbnail_url,omitempty"`
-	IsPublished    bool       `json:"is_published"`
-	PublishedAt    *time.Time `json:"published_at,omitempty"`
-	AuthorID       *string    `json:"author_id,omitempty"`
-	AuthorNama     string     `json:"author_nama"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID                string     `json:"id"`
+	Tipe              string     `json:"tipe"`
+	Judul             string     `json:"judul"`
+	Slug              string     `json:"slug"`
+	Ringkasan         string     `json:"ringkasan"`
+	IsiKonten         string     `json:"isi_konten"`
+	ThumbnailFilePath *string    `json:"thumbnail_file_path,omitempty"`
+	ThumbnailURL      *string    `json:"thumbnail_url,omitempty"`
+	IsPublished       bool       `json:"is_published"`
+	PublishedAt       *time.Time `json:"published_at,omitempty"`
+	AuthorID          *string    `json:"author_id,omitempty"`
+	AuthorNama        string     `json:"author_nama"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type KontenPublikListItem struct {
@@ -62,10 +62,10 @@ type KontenPublikAdminListResponse struct {
 }
 
 type KontenPublikInput struct {
-	Tipe           string  `json:"tipe"`
-	Judul          string  `json:"judul"`
-	Ringkasan      string  `json:"ringkasan"`
-	IsiKonten      string  `json:"isi_konten"`
-	ThumbnailR2Key *string `json:"thumbnail_r2_key,omitempty"`
-	IsPublished    *bool   `json:"is_published,omitempty"`
+	Tipe              string  `json:"tipe"`
+	Judul             string  `json:"judul"`
+	Ringkasan         string  `json:"ringkasan"`
+	IsiKonten         string  `json:"isi_konten"`
+	ThumbnailFilePath *string `json:"thumbnail_file_path,omitempty"`
+	IsPublished       *bool   `json:"is_published,omitempty"`
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/abyankamal/sidak/backend/config"
 	"github.com/abyankamal/sidak/backend/internal/domain"
@@ -13,7 +14,7 @@ import (
 
 var (
 	ErrTransaksiNotFound = errors.New("transaksi tidak ditemukan")
-	ErrInvalidReviewRole = errors.New("hanya SEKLUR atau KASI yang berwenang melakukan review")
+	ErrInvalidReviewRole = errors.New("hanya LURAH, SEKLUR, atau KASI yang berwenang melakukan review")
 )
 
 type TransaksiService struct {
@@ -58,28 +59,30 @@ func (s *TransaksiService) GetDetail(ctx context.Context, id string) (*domain.Tr
 		return nil, ErrTransaksiNotFound
 	}
 
-	// Generate preview URLs for attachments
-	presignedURLs := make([]string, len(t.Lampiran))
+	// Generate download URLs for attachments
+	lampiranURLs := make([]string, len(t.Lampiran))
 	for i, lampiranKey := range t.Lampiran {
-		presignedURLs[i] = fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, lampiranKey)
+		cleanKey := strings.TrimPrefix(lampiranKey, "uploads/")
+		lampiranURLs[i] = fmt.Sprintf("%s/%s", strings.TrimRight(s.cfg.StoragePublicURL, "/"), cleanKey)
 	}
 
 	return &domain.TransaksiDetailResponse{
-		ID:                    t.ID,
-		WargaNIK:              t.WargaNIK,
-		LayananID:             t.LayananID,
-		DataIsian:             t.DataIsian,
-		LampiranPresignedURLs: presignedURLs,
-		Status:                t.Status,
-		CatatanReview:         t.CatatanReview,
-		ReviewedBy:            t.ReviewedBy,
-		ReviewedAt:            t.ReviewedAt,
-		CreatedAt:             t.CreatedAt,
+		ID:            t.ID,
+		WargaNIK:      t.WargaNIK,
+		LayananID:     t.LayananID,
+		DataIsian:     t.DataIsian,
+		LampiranURLs:  lampiranURLs,
+		Status:        t.Status,
+		CatatanReview: t.CatatanReview,
+		ReviewedBy:    t.ReviewedBy,
+		ReviewedAt:    t.ReviewedAt,
+		CreatedAt:     t.CreatedAt,
 	}, nil
 }
 
 func (s *TransaksiService) Review(ctx context.Context, id string, req domain.ReviewTransaksiRequest, reviewedBy, userRole string) (*domain.StandardMessageResponse, error) {
-	if userRole != "SEKLUR" && userRole != "KASI" {
+	role := strings.ToUpper(userRole)
+	if role != "LURAH" && role != "SEKLUR" && role != "KASI" {
 		return nil, ErrInvalidReviewRole
 	}
 

@@ -1,15 +1,17 @@
 -- =============================================================================
--- MIGRATION 000001: INITIAL SCHEMA FOR SIDAK
+-- MIGRATION 000001: INITIAL SCHEMA FOR SIDAK (LOCAL STORAGE & NIK/NIP)
 -- =============================================================================
 
--- 1. Tabel Pengguna (RBAC Sederhana: SEKDES, KASI, KADER)
+-- 1. Tabel Pengguna (RBAC: LURAH, SEKLUR, KASI, KADER)
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(26) PRIMARY KEY, -- ULID
-    nik VARCHAR(16) UNIQUE NOT NULL,
+    nik VARCHAR(16) UNIQUE,     -- 16 Digit (Wajib untuk KADER / Warga)
+    nip VARCHAR(18) UNIQUE,     -- 18 Digit (Wajib untuk PNS: LURAH, SEKLUR, KASI)
     nama VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('SEKLUR', 'KASI', 'KADER')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('LURAH', 'SEKLUR', 'KASI', 'KADER')),
+    CONSTRAINT check_user_identifier CHECK (nik IS NOT NULL OR nip IS NOT NULL),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS profil_wilayah (
     alamat_kantor TEXT NOT NULL,
     kontak_telepon VARCHAR(50),
     kontak_email VARCHAR(255),
-    struktur_organisasi_r2_key VARCHAR(500),
+    struktur_organisasi_file_path VARCHAR(500),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -85,7 +87,7 @@ CREATE TABLE IF NOT EXISTS konten_publik (
     slug VARCHAR(255) UNIQUE NOT NULL,
     ringkasan TEXT NOT NULL,
     isi_konten TEXT NOT NULL,
-    thumbnail_r2_key VARCHAR(500),
+    thumbnail_file_path VARCHAR(500),
     is_published BOOLEAN NOT NULL DEFAULT FALSE,
     published_at TIMESTAMPTZ,
     author_id VARCHAR(26) REFERENCES users(id) ON DELETE SET NULL,
@@ -102,7 +104,7 @@ CREATE TABLE IF NOT EXISTS dokumen_output (
     id VARCHAR(26) PRIMARY KEY, -- ULID
     transaksi_id VARCHAR(26) NOT NULL REFERENCES transaksi_pelayanan(id) ON DELETE CASCADE,
     status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING' CHECK (status IN ('PROCESSING', 'READY', 'FAILED')),
-    file_path_r2 VARCHAR(500),
+    file_path VARCHAR(500),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

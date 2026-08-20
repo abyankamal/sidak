@@ -3,8 +3,12 @@ package test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/abyankamal/sidak/backend/internal/domain"
 	"github.com/oklog/ulid/v2"
@@ -13,136 +17,130 @@ import (
 func TestSyncFlow(t *testing.T) {
 	env := SetupTestEnv(t)
 
-	// Login as KADER to obtain JWT
-	loginBody, _ := json.Marshal(domain.LoginRequest{
-		NIK:      "3205010303920003",
-		Password: "AdminSidak2026!",
+	// 1. Authenticate as KADER
+	kaderLogin, _ := json.Marshal(domain.LoginRequest{
+		Identifier: "3205010303920003",
+		Password:   "AdminSidak2026!",
 	})
-	lResp, err := http.Post(env.Server.URL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(loginBody))
+	loginResp, err := http.Post(env.Server.URL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(kaderLogin))
+	if err != nil || loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("Login as kader failed: %v", err)
+	}
+	var auth domain.LoginResponse
+	_ = json.NewDecoder(loginResp.Body).Decode(&auth)
+	loginResp.Body.Close()
+
+	transaksiID := ulid.Make().String()
+	uniqueNIK := fmt.Sprintf("320599%010d", time.Now().UnixNano()%10000000000)
+
+	// 2. Test Local Storage Upload (/api/v1/storage/upload)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("category", "lampiran")
+	_ = writer.WriteField("transaksi_id", transaksiID)
+	part, _ := writer.CreateFormFile("file", "ktp_warga.jpg")
+	_, _ = io.WriteString(part, "fake_image_bytes_for_ktp")
+	_ = writer.Close()
+
+	uploadReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/storage/upload", body)
+	uploadReq.Header.Set("Authorization", "Bearer "+auth.Token)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+
+	uploadResp, err := http.DefaultClient.Do(uploadReq)
 	if err != nil {
-		t.Fatalf("Login failed: %v", err)
+		t.Fatalf("Storage upload request failed: %v", err)
 	}
-	var loginResp domain.LoginResponse
-	_ = json.NewDecoder(lResp.Body).Decode(&loginResp)
-	lResp.Body.Close()
-	token := loginResp.Token
+	if uploadResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Expected status 201 for storage upload, got %d", uploadResp.StatusCode)
+	}
+	var fileResp domain.FileUploadResponse
+	_ = json.NewDecoder(uploadResp.Body).Decode(&fileResp)
+	uploadResp.Body.Close()
 
-	// 1. Test Request Presigned URL
-	trxID := ulid.Make().String()
-	presignBody, _ := json.Marshal(domain.PresignUploadRequest{
-		TransaksiID: trxID,
-		FileName:    "ktp_warga.jpg",
-		ContentType: "image/jpeg",
-	})
-	pReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/presigned-url", bytes.NewBuffer(presignBody))
-	pReq.Header.Set("Authorization", "Bearer "+token)
-	pReq.Header.Set("Content-Type", "application/json")
-	pResp, err := http.DefaultClient.Do(pReq)
-	if err != nil {
-		t.Fatalf("Presigned URL request failed: %v", err)
-	}
-	if pResp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200 for presigned url, got %d", pResp.StatusCode)
-	}
-	var presignResp domain.PresignUploadResponse
-	_ = json.NewDecoder(pResp.Body).Decode(&presignResp)
-	pResp.Body.Close()
-
-	expectedPath := "lampiran/3205010303920003/" + trxID + "_ktp_warga.jpg"
-	if presignResp.FilePathR2 != expectedPath {
-		t.Errorf("Expected file_path_r2 '%s', got '%s'", expectedPath, presignResp.FilePathR2)
+	if fileResp.FilePath == "" || fileResp.FileURL == "" {
+		t.Fatalf("Expected non-empty FilePath and FileURL")
 	}
 
-	// 2. Test Commit New Valid Transaction -> 201 Created
-	wargaNIK := "3205019999990001"
-	validCommitBody, _ := json.Marshal(domain.SyncCommitRequest{
-		TransaksiID: trxID,
-		WargaNIK:    wargaNIK,
+	// 3. Test Commit (/api/v1/sync/commit) -> 201 Created
+	commitBody, _ := json.Marshal(domain.SyncCommitRequest{
+		TransaksiID: transaksiID,
+		WargaNIK:    uniqueNIK,
 		LayananID:   "SKTM",
-		DataIsian: json.RawMessage(`{
-			"keperluan": "Pendaftaran Beasiswa Mahasiswa",
-			"penghasilan_bulanan": 750000,
-			"jumlah_tanggungan": 3,
-			"keterangan_pekerjaan": "Buruh Harian Lepas"
-		}`),
-		Lampiran: []string{presignResp.FilePathR2},
+		DataIsian:   json.RawMessage(`{"keperluan": "Beasiswa Kuliah", "penghasilan_bulanan": 800000, "jumlah_tanggungan": 2}`),
+		Lampiran:    []string{fileResp.FilePath},
 	})
 
-	cReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(validCommitBody))
-	cReq.Header.Set("Authorization", "Bearer "+token)
-	cReq.Header.Set("Content-Type", "application/json")
-	cReq.Header.Set("Idempotency-Key", trxID)
-	cResp, err := http.DefaultClient.Do(cReq)
+	req, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(commitBody))
+	req.Header.Set("Authorization", "Bearer "+auth.Token)
+	req.Header.Set("Idempotency-Key", transaksiID)
+	req.Header.Set("Content-Type", "application/json")
+
+	commitResp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Commit request failed: %v", err)
 	}
-	if cResp.StatusCode != http.StatusCreated {
-		t.Fatalf("Expected status 201 Created for new commit, got %d", cResp.StatusCode)
+	if commitResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Expected status 201 for first commit, got %d", commitResp.StatusCode)
 	}
-	cResp.Body.Close()
+	commitResp.Body.Close()
 
-	// 3. Test Commit Replay with Same Idempotency-Key -> 409 Conflict
-	cReq2, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(validCommitBody))
-	cReq2.Header.Set("Authorization", "Bearer "+token)
-	cReq2.Header.Set("Content-Type", "application/json")
-	cReq2.Header.Set("Idempotency-Key", trxID)
-	cResp2, err := http.DefaultClient.Do(cReq2)
+	// 4. Test Idempotent Duplicate Replay (same Idempotency-Key) -> 409 Conflict
+	reqDup, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(commitBody))
+	reqDup.Header.Set("Authorization", "Bearer "+auth.Token)
+	reqDup.Header.Set("Idempotency-Key", transaksiID)
+	reqDup.Header.Set("Content-Type", "application/json")
+
+	dupResp, err := http.DefaultClient.Do(reqDup)
 	if err != nil {
-		t.Fatalf("Replay commit request failed: %v", err)
+		t.Fatalf("Duplicate commit request failed: %v", err)
 	}
-	if cResp2.StatusCode != http.StatusConflict {
-		t.Errorf("Expected status 409 Conflict for idempotent replay, got %d", cResp2.StatusCode)
+	if dupResp.StatusCode != http.StatusConflict {
+		t.Errorf("Expected status 409 for duplicate replay, got %d", dupResp.StatusCode)
 	}
-	cResp2.Body.Close()
+	dupResp.Body.Close()
 
-	// 4. Test 24-Hour Logical Duplicate Prevention (Same Warga NIK + Layanan ID while still 'menunggu_review') -> 400 Bad Request
-	trxID2 := ulid.Make().String()
-	dupLogicalBody, _ := json.Marshal(domain.SyncCommitRequest{
-		TransaksiID: trxID2,
-		WargaNIK:    wargaNIK, // same NIK
-		LayananID:   "SKTM",   // same layanan
-		DataIsian: json.RawMessage(`{
-			"keperluan": "Pendaftaran Beasiswa Lain",
-			"penghasilan_bulanan": 800000,
-			"jumlah_tanggungan": 2
-		}`),
-	})
-
-	cReq3, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(dupLogicalBody))
-	cReq3.Header.Set("Authorization", "Bearer "+token)
-	cReq3.Header.Set("Content-Type", "application/json")
-	cReq3.Header.Set("Idempotency-Key", trxID2)
-	cResp3, err := http.DefaultClient.Do(cReq3)
-	if err != nil {
-		t.Fatalf("Duplicate logical commit request failed: %v", err)
-	}
-	if cResp3.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status 400 Bad Request for 24h logical duplicate, got %d", cResp3.StatusCode)
-	}
-	cResp3.Body.Close()
-
-	// 5. Test Schema Validation Failure (missing required field 'jumlah_tanggungan' in SKTM) -> 400 Bad Request
-	trxID3 := ulid.Make().String()
-	invalidSchemaBody, _ := json.Marshal(domain.SyncCommitRequest{
-		TransaksiID: trxID3,
-		WargaNIK:    "3205018888880002",
+	// 5. Test Logical Duplicate (different ULID, same NIK + LayananID within 24h) -> 400 Bad Request
+	newTrxID := ulid.Make().String()
+	commitBodyLogicalDup, _ := json.Marshal(domain.SyncCommitRequest{
+		TransaksiID: newTrxID,
+		WargaNIK:    uniqueNIK,
 		LayananID:   "SKTM",
-		DataIsian: json.RawMessage(`{
-			"keperluan": "Pendaftaran Sekolah"
-			// missing required fields penghasilan_bulanan & jumlah_tanggungan
-		}`),
+		DataIsian:   json.RawMessage(`{"keperluan": "Keringanan UKT", "penghasilan_bulanan": 850000, "jumlah_tanggungan": 2}`),
 	})
+	reqLogicalDup, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(commitBodyLogicalDup))
+	reqLogicalDup.Header.Set("Authorization", "Bearer "+auth.Token)
+	reqLogicalDup.Header.Set("Idempotency-Key", newTrxID)
+	reqLogicalDup.Header.Set("Content-Type", "application/json")
 
-	cReq4, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(invalidSchemaBody))
-	cReq4.Header.Set("Authorization", "Bearer "+token)
-	cReq4.Header.Set("Content-Type", "application/json")
-	cReq4.Header.Set("Idempotency-Key", trxID3)
-	cResp4, err := http.DefaultClient.Do(cReq4)
+	logDupResp, err := http.DefaultClient.Do(reqLogicalDup)
+	if err != nil {
+		t.Fatalf("Logical duplicate commit request failed: %v", err)
+	}
+	if logDupResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for 24h logical duplicate, got %d", logDupResp.StatusCode)
+	}
+	logDupResp.Body.Close()
+
+	// 6. Test JSON Schema Validation Failure (missing required field) -> 400 Bad Request
+	schemaFailID := ulid.Make().String()
+	otherNIK := fmt.Sprintf("320599%010d", (time.Now().UnixNano()+999)%10000000000)
+	commitBodyInvalidSchema, _ := json.Marshal(domain.SyncCommitRequest{
+		TransaksiID: schemaFailID,
+		WargaNIK:    otherNIK,
+		LayananID:   "SKTM",
+		DataIsian:   json.RawMessage(`{"penghasilan_bulanan": 800000}`), // missing 'keperluan' and 'jumlah_tanggungan'
+	})
+	reqSchemaFail, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/sync/commit", bytes.NewBuffer(commitBodyInvalidSchema))
+	reqSchemaFail.Header.Set("Authorization", "Bearer "+auth.Token)
+	reqSchemaFail.Header.Set("Idempotency-Key", schemaFailID)
+	reqSchemaFail.Header.Set("Content-Type", "application/json")
+
+	schemaFailResp, err := http.DefaultClient.Do(reqSchemaFail)
 	if err != nil {
 		t.Fatalf("Invalid schema commit request failed: %v", err)
 	}
-	if cResp4.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status 400 Bad Request for schema violation, got %d", cResp4.StatusCode)
+	if schemaFailResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status 400 for invalid JSON Schema, got %d", schemaFailResp.StatusCode)
 	}
-	cResp4.Body.Close()
+	schemaFailResp.Body.Close()
 }

@@ -197,27 +197,3 @@ func (h *CMSAdminHandler) DeleteKonten(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, resp)
 }
-
-func (h *CMSAdminHandler) PresignedURL(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		FileName    string `json:"file_name"`
-		ContentType string `json:"content_type"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		Error(w, http.StatusBadRequest, "Payload presigned URL tidak valid")
-		return
-	}
-
-	if req.FileName == "" || req.ContentType == "" {
-		Error(w, http.StatusBadRequest, "file_name dan content_type wajib diisi")
-		return
-	}
-
-	resp, err := h.cmsService.GenerateMediaPresignedURL(r.Context(), req.FileName, req.ContentType)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "Gagal membuat presigned upload URL media")
-		return
-	}
-
-	JSON(w, http.StatusOK, resp)
-}

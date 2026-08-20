@@ -20,7 +20,7 @@ func NewProfilRepository(db *pgxpool.Pool) *ProfilRepository {
 
 func (r *ProfilRepository) Get(ctx context.Context) (*domain.ProfilWilayah, error) {
 	query := `
-		SELECT nama_kelurahan, kecamatan, kabupaten_kota, visi, misi, sejarah, alamat_kantor, kontak_telepon, kontak_email, struktur_organisasi_r2_key
+		SELECT nama_kelurahan, kecamatan, kabupaten_kota, visi, misi, sejarah, alamat_kantor, kontak_telepon, kontak_email, struktur_organisasi_file_path
 		FROM profil_wilayah
 		WHERE id = 1
 	`
@@ -64,14 +64,14 @@ func (r *ProfilRepository) Update(ctx context.Context, input domain.ProfilWilaya
 		    alamat_kantor = $7,
 		    kontak_telepon = $8,
 		    kontak_email = $9,
-		    struktur_organisasi_r2_key = $10,
+		    struktur_organisasi_file_path = $10,
 		    updated_at = NOW()
 		WHERE id = 1
 	`
 	_, err = r.db.Exec(ctx, query,
 		input.NamaKelurahan, input.Kecamatan, input.KabupatenKota, input.Visi,
 		misiJSON, input.Sejarah, input.AlamatKantor, input.KontakTelepon,
-		input.KontakEmail, input.StrukturOrganisasiR2Key,
+		input.KontakEmail, input.StrukturOrganisasiFilePath,
 	)
 	return err
 }

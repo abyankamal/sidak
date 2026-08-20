@@ -1,14 +1,26 @@
 -- =============================================================================
--- MIGRATION 000002: SEED INITIAL DATA
+-- MIGRATION 000002: SEED INITIAL DATA (LURAH, SEKLUR, KASI, KADER)
 -- =============================================================================
 
 -- 1. Seed Users (Default password: AdminSidak2026!)
--- Hash bcrypt cost 10: $2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO
-INSERT INTO users (id, nik, nama, email, password_hash, role, created_at, updated_at)
+-- Hash bcrypt: $2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO
+INSERT INTO users (id, nik, nip, nama, email, password_hash, role, created_at, updated_at)
 VALUES 
     (
+        '01ARZ3NDEKTSV4RRFFQ69G5000',
+        NULL,
+        '197503151998031001', 
+        'Drs. H. Ahmad Sanusi, M.Si (Lurah)', 
+        'lurah@sukanegla.desa.id', 
+        '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
+        'LURAH', 
+        NOW(), 
+        NOW()
+    ),
+    (
         '01ARZ3NDEKTSV4RRFFQ69G5001', 
-        '3205010101800001', 
+        NULL,
+        '198001012005011001', 
         'Drs. H. Mulyadi (Seklur)', 
         'seklur@sukanegla.desa.id', 
         '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
@@ -18,7 +30,8 @@ VALUES
     ),
     (
         '01ARZ3NDEKTSV4RRFFQ69G5002', 
-        '3205010202850002', 
+        NULL,
+        '198502022010012002', 
         'Siti Nurhaliza, S.AP (Kasi Pelayanan)', 
         'kasi@sukanegla.desa.id', 
         '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
@@ -29,6 +42,7 @@ VALUES
     (
         '01ARZ3NDEKTSV4RRFFQ69G5003', 
         '3205010303920003', 
+        NULL,
         'Asep Sunandar (Kader RW 01)', 
         'kader01@sukanegla.desa.id', 
         '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
@@ -40,7 +54,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 2. Seed Profil Wilayah (Singleton ID = 1)
 INSERT INTO profil_wilayah (
-    id, nama_kelurahan, kecamatan, kabupaten_kota, visi, misi, sejarah, alamat_kantor, kontak_telepon, kontak_email, struktur_organisasi_r2_key, updated_at
+    id, nama_kelurahan, kecamatan, kabupaten_kota, visi, misi, sejarah, alamat_kantor, kontak_telepon, kontak_email, struktur_organisasi_file_path, updated_at
 )
 VALUES (
     1,
@@ -58,7 +72,7 @@ VALUES (
     'Jl. Sukanegla Raya No. 45, RT 02 / RW 03, Kelurahan Sukanegla, Garut Kota, Jawa Barat 44118',
     '0262-234567',
     'pelayanan@sukanegla.desa.id',
-    'public/cms/2026/struktur_organisasi_sukanegla.png',
+    'uploads/public/cms/struktur_organisasi_sukanegla.png',
     NOW()
 )
 ON CONFLICT (id) DO NOTHING;
@@ -162,7 +176,6 @@ VALUES
 ON CONFLICT (layanan_id) DO NOTHING;
 
 -- 4. Seed Navigasi Menu Publik (Hierarki Maksimal 2 Level)
--- Header Items
 INSERT INTO navigasi_menu (id, parent_id, label, url, urutan, is_active, created_at, updated_at)
 VALUES 
     ('01ARZMENU00000000000000001', NULL, 'Beranda', '/', 1, TRUE, NOW(), NOW()),
@@ -172,7 +185,6 @@ VALUES
     ('01ARZMENU00000000000000005', NULL, 'Kontak', '/kontak', 5, TRUE, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
--- Dropdown Sub-menu untuk 'Profil Wilayah' (parent_id: 01ARZMENU00000000000000002)
 INSERT INTO navigasi_menu (id, parent_id, label, url, urutan, is_active, created_at, updated_at)
 VALUES 
     ('01ARZSUB000000000000000001', '01ARZMENU00000000000000002', 'Visi & Misi', '/profil#visi-misi', 1, TRUE, NOW(), NOW()),
@@ -182,7 +194,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 5. Seed Konten Publik Awal (Berita & Pengumuman)
 INSERT INTO konten_publik (
-    id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_r2_key, is_published, published_at, author_id, author_nama, created_at, updated_at
+    id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_file_path, is_published, published_at, author_id, author_nama, created_at, updated_at
 )
 VALUES 
     (
@@ -192,7 +204,7 @@ VALUES
         'penyaluran-bansos-tahap-2',
         'Pemerintah Kelurahan Sukanegla bersama perwakilan Dinas Sosial melaksanakan penyaluran bansos pangan kepada 250 KPM bertempat di Aula Kelurahan.',
         '<p>Pemerintah Kelurahan Sukanegla, Kecamatan Garut Kota, telah sukses menyalurkan Bantuan Sosial Pangan Tahap II kepada 250 Keluarga Penerima Manfaat (KPM) pada hari ini bertempat di Aula Kantor Kelurahan Sukanegla.</p><p>Lurah Sukanegla menyampaikan apresiasi kepada seluruh kader RW dan RT yang telah aktif memvalidasi data penerima melalui aplikasi SIDAK sehingga penyaluran berjalan tepat sasaran, tertib, dan tanpa antrean panjang.</p>',
-        'public/cms/2026/berita_bansos_sukanegla.jpg',
+        'uploads/public/cms/berita_bansos_sukanegla.jpg',
         TRUE,
         NOW() - INTERVAL '2 days',
         '01ARZ3NDEKTSV4RRFFQ69G5001',
@@ -207,7 +219,7 @@ VALUES
         'jadwal-pelayanan-keliling-ikd',
         'Pelayanan jemput bola administrasi kependudukan (e-KTP dan Aktivasi IKD) akan diadakan bergilir mulai Senin mendatang.',
         '<p>Diberitahukan kepada seluruh warga Kelurahan Sukanegla bahwa Tim Pelayanan Administrasi Kependudukan Keliling akan hadir di lingkungan RW masing-masing mulai pukul 08.30 - 14.00 WIB.</p><p>Warga yang belum memiliki e-KTP atau ingin mengaktivasi Identitas Kependudukan Digital (IKD) dapat langsung mendatangi pos pelayanan RW terdekat dengan membawa fotokopi Kartu Keluarga (KK).</p>',
-        'public/cms/2026/pengumuman_layanan_keliling.jpg',
+        'uploads/public/cms/pengumuman_layanan_keliling.jpg',
         TRUE,
         NOW() - INTERVAL '1 day',
         '01ARZ3NDEKTSV4RRFFQ69G5002',

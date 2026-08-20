@@ -14,6 +14,7 @@ import (
 type RouterParams struct {
 	Config           *config.Config
 	AuthService      *service.AuthService
+	StorageService   *service.StorageService
 	SyncService      *service.SyncService
 	TransaksiService *service.TransaksiService
 	CMSService       *service.CMSService
@@ -39,8 +40,13 @@ func NewRouter(p RouterParams) http.Handler {
 		MaxAge:           300,
 	}))
 
+	// Static File Server for Local Uploads
+	uploadsDir := http.Dir(p.Config.StorageBasePath)
+	r.Handle("/uploads/*", http.StripPrefix("/uploads", http.FileServer(uploadsDir)))
+
 	// Handlers
 	authHandler := NewAuthHandler(p.AuthService)
+	storageHandler := NewStorageHandler(p.StorageService)
 	syncHandler := NewSyncHandler(p.SyncService)
 	transaksiHandler := NewTransaksiHandler(p.TransaksiService)
 	cmsPublicHandler := NewCMSPublicHandler(p.CMSService)
@@ -60,16 +66,23 @@ func NewRouter(p RouterParams) http.Handler {
 		})
 
 		// ---------------------------------------------------------------------
-		// 2. SINKRONISASI MOBILE (OFFLINE-FIRST)
+		// 2. PENYIMPANAN BERKAS LOKAL
+		// ---------------------------------------------------------------------
+		v1.Group(func(storage chi.Router) {
+			storage.Use(middleware.AuthMiddleware(p.AuthService))
+			storage.Post("/storage/upload", storageHandler.Upload)
+		})
+
+		// ---------------------------------------------------------------------
+		// 3. SINKRONISASI MOBILE (OFFLINE-FIRST)
 		// ---------------------------------------------------------------------
 		v1.Group(func(sync chi.Router) {
 			sync.Use(middleware.AuthMiddleware(p.AuthService))
-			sync.Post("/sync/presigned-url", syncHandler.RequestPresignedURL)
 			sync.Post("/sync/commit", syncHandler.Commit)
 		})
 
 		// ---------------------------------------------------------------------
-		// 3. PELAYANAN & VERIFIKASI
+		// 4. PELAYANAN & VERIFIKASI
 		// ---------------------------------------------------------------------
 		v1.Group(func(pelayanan chi.Router) {
 			pelayanan.Use(middleware.AuthMiddleware(p.AuthService))
@@ -80,7 +93,7 @@ func NewRouter(p RouterParams) http.Handler {
 		})
 
 		// ---------------------------------------------------------------------
-		// 4. DOKUMEN & PDF (Placeholders for Fase 2)
+		// 5. DOKUMEN & PDF (Stubs for Fase 2)
 		// ---------------------------------------------------------------------
 		v1.Group(func(doc chi.Router) {
 			doc.Use(middleware.AuthMiddleware(p.AuthService))
@@ -101,7 +114,7 @@ func NewRouter(p RouterParams) http.Handler {
 		})
 
 		// ---------------------------------------------------------------------
-		// 5. CMS PUBLIK (UNAUTHENTICATED)
+		// 6. CMS PUBLIK (UNAUTHENTICATED)
 		// ---------------------------------------------------------------------
 		v1.Get("/public/profil", cmsPublicHandler.GetProfil)
 		v1.Get("/public/menu", cmsPublicHandler.GetMenu)
@@ -109,11 +122,11 @@ func NewRouter(p RouterParams) http.Handler {
 		v1.Get("/public/konten/{slug}", cmsPublicHandler.GetKontenDetail)
 
 		// ---------------------------------------------------------------------
-		// 6. CMS ADMIN (AUTHENTICATED SEKLUR/KASI)
+		// 7. CMS ADMIN (AUTHENTICATED LURAH/SEKLUR/KASI)
 		// ---------------------------------------------------------------------
 		v1.Group(func(admin chi.Router) {
 			admin.Use(middleware.AuthMiddleware(p.AuthService))
-			admin.Use(middleware.RequireRoles("SEKLUR", "KASI"))
+			admin.Use(middleware.RequireRoles("LURAH", "SEKLUR", "KASI"))
 
 			admin.Put("/cms/profil", cmsAdminHandler.UpdateProfil)
 			admin.Get("/cms/menu", cmsAdminHandler.ListMenu)
@@ -125,8 +138,6 @@ func NewRouter(p RouterParams) http.Handler {
 			admin.Post("/cms/konten", cmsAdminHandler.CreateKonten)
 			admin.Put("/cms/konten/{id}", cmsAdminHandler.UpdateKonten)
 			admin.Delete("/cms/konten/{id}", cmsAdminHandler.DeleteKonten)
-
-			admin.Post("/cms/presigned-url", cmsAdminHandler.PresignedURL)
 		})
 	})
 

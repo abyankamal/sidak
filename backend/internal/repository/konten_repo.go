@@ -14,6 +14,13 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
+func Slugify(s string) string {
+	s = strings.ToLower(s)
+	reg := regexp.MustCompile(`[^a-z0-9]+`)
+	s = reg.ReplaceAllString(s, "-")
+	return strings.Trim(s, "-")
+}
+
 type KontenRepository struct {
 	db *pgxpool.Pool
 }
@@ -50,7 +57,7 @@ func (r *KontenRepository) ListPublic(ctx context.Context, tipe string, page, li
 	}
 
 	dataQuery := fmt.Sprintf(`
-		SELECT id, tipe, judul, slug, ringkasan, thumbnail_r2_key, published_at
+		SELECT id, tipe, judul, slug, ringkasan, thumbnail_file_path, published_at
 		FROM konten_publik
 		WHERE %s
 		ORDER BY published_at DESC NULLS LAST, created_at DESC
@@ -82,7 +89,7 @@ func (r *KontenRepository) ListPublic(ctx context.Context, tipe string, page, li
 
 func (r *KontenRepository) GetBySlugPublic(ctx context.Context, slug string) (*domain.KontenPublikDetail, error) {
 	query := `
-		SELECT id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_r2_key, published_at, author_nama
+		SELECT id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_file_path, published_at, author_nama
 		FROM konten_publik
 		WHERE slug = $1 AND is_published = TRUE
 	`
@@ -174,18 +181,18 @@ func (r *KontenRepository) Create(ctx context.Context, input domain.KontenPublik
 
 	query := `
 		INSERT INTO konten_publik (
-			id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_r2_key, is_published, published_at, author_id, author_nama, created_at, updated_at
+			id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_file_path, is_published, published_at, author_id, author_nama, created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
 		)
-		RETURNING id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_r2_key, is_published, published_at, author_id, author_nama, created_at, updated_at
+		RETURNING id, tipe, judul, slug, ringkasan, isi_konten, thumbnail_file_path, is_published, published_at, author_id, author_nama, created_at, updated_at
 	`
 	var k domain.KontenPublik
 	err := r.db.QueryRow(ctx, query,
 		id, strings.ToUpper(input.Tipe), input.Judul, slug, input.Ringkasan, input.IsiKonten,
-		input.ThumbnailR2Key, isPublished, publishedAt, authorID, authorNama,
+		input.ThumbnailFilePath, isPublished, publishedAt, authorID, authorNama,
 	).Scan(
-		&k.ID, &k.Tipe, &k.Judul, &k.Slug, &k.Ringkasan, &k.IsiKonten, &k.ThumbnailR2Key,
+		&k.ID, &k.Tipe, &k.Judul, &k.Slug, &k.Ringkasan, &k.IsiKonten, &k.ThumbnailFilePath,
 		&k.IsPublished, &k.PublishedAt, &k.AuthorID, &k.AuthorNama, &k.CreatedAt, &k.UpdatedAt,
 	)
 	if err != nil {
@@ -208,7 +215,7 @@ func (r *KontenRepository) Update(ctx context.Context, id string, input domain.K
 		    judul = $2,
 		    ringkasan = $3,
 		    isi_konten = $4,
-		    thumbnail_r2_key = COALESCE($5, thumbnail_r2_key),
+		    thumbnail_file_path = COALESCE($5, thumbnail_file_path),
 		    is_published = COALESCE($6, is_published)%s,
 		    updated_at = NOW()
 		WHERE id = $7
@@ -216,7 +223,7 @@ func (r *KontenRepository) Update(ctx context.Context, id string, input domain.K
 
 	_, err := r.db.Exec(ctx, query,
 		strings.ToUpper(input.Tipe), input.Judul, input.Ringkasan, input.IsiKonten,
-		input.ThumbnailR2Key, input.IsPublished, id,
+		input.ThumbnailFilePath, input.IsPublished, id,
 	)
 	return err
 }
@@ -225,11 +232,4 @@ func (r *KontenRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM konten_publik WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, id)
 	return err
-}
-
-func Slugify(s string) string {
-	s = strings.ToLower(s)
-	reg := regexp.MustCompile(`[^a-z0-9]+`)
-	s = reg.ReplaceAllString(s, "-")
-	return strings.Trim(s, "-")
 }

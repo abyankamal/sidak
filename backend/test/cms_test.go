@@ -12,125 +12,129 @@ import (
 func TestCMSFlow(t *testing.T) {
 	env := SetupTestEnv(t)
 
-	// 1. CMS Public - Unauthenticated GET /public/profil -> 200 OK
+	// 1. Unauthenticated Public CMS Access (Profil)
 	pResp, err := http.Get(env.Server.URL + "/api/v1/public/profil")
 	if err != nil || pResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to fetch public profil: %v (Status: %d)", err, pResp.StatusCode)
+		t.Fatalf("Public profil endpoint failed: %v, status: %d", err, pResp.StatusCode)
 	}
 	var profil domain.ProfilWilayah
 	_ = json.NewDecoder(pResp.Body).Decode(&profil)
 	pResp.Body.Close()
 
 	if profil.NamaKelurahan != "Sukanegla" {
-		t.Errorf("Expected nama kelurahan 'Sukanegla', got '%s'", profil.NamaKelurahan)
+		t.Errorf("Expected kelurahan Sukanegla, got %s", profil.NamaKelurahan)
 	}
 
-	// 2. CMS Public - Unauthenticated GET /public/menu -> 200 OK
+	// 2. Unauthenticated Public CMS Access (Menu Hierarchy)
 	mResp, err := http.Get(env.Server.URL + "/api/v1/public/menu")
 	if err != nil || mResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to fetch public menu: %v", err)
+		t.Fatalf("Public menu endpoint failed: %v, status: %d", err, mResp.StatusCode)
 	}
-	var menuList []domain.NavigasiMenuPublic
-	_ = json.NewDecoder(mResp.Body).Decode(&menuList)
+	var menu []domain.NavigasiMenuPublic
+	_ = json.NewDecoder(mResp.Body).Decode(&menu)
 	mResp.Body.Close()
 
-	if len(menuList) == 0 {
-		t.Errorf("Expected at least 1 public menu")
+	if len(menu) == 0 {
+		t.Errorf("Expected non-empty public menu list")
 	}
 
-	// 3. CMS Public - Unauthenticated GET /public/konten -> 200 OK
-	kResp, err := http.Get(env.Server.URL + "/api/v1/public/konten")
-	if err != nil || kResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to fetch public konten: %v", err)
+	// 3. Unauthenticated Public CMS Access (Konten List & Detail)
+	kListResp, err := http.Get(env.Server.URL + "/api/v1/public/konten")
+	if err != nil || kListResp.StatusCode != http.StatusOK {
+		t.Fatalf("Public konten endpoint failed: %v, status: %d", err, kListResp.StatusCode)
 	}
-	var kontenList domain.KontenPublikListResponse
-	_ = json.NewDecoder(kResp.Body).Decode(&kontenList)
-	kResp.Body.Close()
+	var kList domain.KontenPublikListResponse
+	_ = json.NewDecoder(kListResp.Body).Decode(&kList)
+	kListResp.Body.Close()
 
-	if len(kontenList.Data) == 0 {
-		t.Errorf("Expected at least 1 public article/announcement")
-	}
-
-	// 4. CMS Public - GET /public/konten/penyaluran-bansos-tahap-2 -> 200 OK
-	kdResp, err := http.Get(env.Server.URL + "/api/v1/public/konten/penyaluran-bansos-tahap-2")
-	if err != nil || kdResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to fetch public konten detail: %v", err)
-	}
-	var detail domain.KontenPublikDetail
-	_ = json.NewDecoder(kdResp.Body).Decode(&detail)
-	kdResp.Body.Close()
-
-	if detail.Slug != "penyaluran-bansos-tahap-2" {
-		t.Errorf("Expected slug 'penyaluran-bansos-tahap-2', got '%s'", detail.Slug)
+	if len(kList.Data) == 0 {
+		t.Errorf("Expected non-empty public konten list")
 	}
 
-	// 5. CMS Admin - Unauthenticated POST /cms/konten -> 401 Unauthorized
-	unauthReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/cms/konten", bytes.NewBuffer([]byte("{}")))
-	unauthResp, err := http.DefaultClient.Do(unauthReq)
-	if err != nil || unauthResp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("Expected 401 Unauthorized for unauthenticated admin access, got %d", unauthResp.StatusCode)
+	kDetailResp, err := http.Get(env.Server.URL + "/api/v1/public/konten/penyaluran-bansos-tahap-2")
+	if err != nil || kDetailResp.StatusCode != http.StatusOK {
+		t.Fatalf("Public konten detail failed: %v, status: %d", err, kDetailResp.StatusCode)
 	}
-	unauthResp.Body.Close()
+	var kDetail domain.KontenPublikDetail
+	_ = json.NewDecoder(kDetailResp.Body).Decode(&kDetail)
+	kDetailResp.Body.Close()
 
-	// 6. Login as SEKLUR to perform Admin CMS operations
+	if kDetail.Slug != "penyaluran-bansos-tahap-2" {
+		t.Errorf("Expected slug penyaluran-bansos-tahap-2, got %s", kDetail.Slug)
+	}
+
+	// 4. Test Protected Admin CMS without Token -> 401 Unauthorized
+	admResp, err := http.Post(env.Server.URL+"/api/v1/cms/konten", "application/json", bytes.NewBuffer([]byte(`{}`)))
+	if err != nil {
+		t.Fatalf("Admin konten unauth failed: %v", err)
+	}
+	if admResp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized for admin CMS without auth, got %d", admResp.StatusCode)
+	}
+	admResp.Body.Close()
+
+	// 5. Authenticate as SEKLUR
 	seklurLogin, _ := json.Marshal(domain.LoginRequest{
-		NIK:      "3205010101800001",
-		Password: "AdminSidak2026!",
+		Identifier: "198001012005011001",
+		Password:   "AdminSidak2026!",
 	})
-	sResp, _ := http.Post(env.Server.URL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(seklurLogin))
-	var sLoginResp domain.LoginResponse
-	_ = json.NewDecoder(sResp.Body).Decode(&sLoginResp)
-	sResp.Body.Close()
-
-	// 7. SEKLUR creates a new news article via POST /cms/konten -> 201 Created
-	isPub := true
-	createKontenBody, _ := json.Marshal(domain.KontenPublikInput{
-		Tipe:        "BERITA",
-		Judul:       "Pembangunan Taman Baca Masyarakat RW 03 Sukanegla",
-		Ringkasan:   "Fasilitas ruang literasi terbuka warga RW 03 telah rampung dibangun.",
-		IsiKonten:   "<p>Pembangunan fasilitas ruang literasi publik yang ramah anak dan keluarga telah selesai 100%.</p>",
-		IsPublished: &isPub,
-	})
-
-	ckReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/cms/konten", bytes.NewBuffer(createKontenBody))
-	ckReq.Header.Set("Authorization", "Bearer "+sLoginResp.Token)
-	ckReq.Header.Set("Content-Type", "application/json")
-	ckResp, err := http.DefaultClient.Do(ckReq)
-	if err != nil || ckResp.StatusCode != http.StatusCreated {
-		t.Fatalf("Failed to create news article: %v (Status: %d)", err, ckResp.StatusCode)
+	loginResp, err := http.Post(env.Server.URL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(seklurLogin))
+	if err != nil || loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("Login as seklur failed: %v", err)
 	}
-	ckResp.Body.Close()
+	var auth domain.LoginResponse
+	_ = json.NewDecoder(loginResp.Body).Decode(&auth)
+	loginResp.Body.Close()
 
-	// 8. SEKLUR updates Profil Wilayah via PUT /cms/profil -> 200 OK
-	updateProfilBody, _ := json.Marshal(domain.ProfilWilayahInput{
-		NamaKelurahan: "Sukanegla",
+	// 6. Create News as Admin -> 201 Created
+	isPub := true
+	newsInput, _ := json.Marshal(domain.KontenPublikInput{
+		Tipe:              "BERITA",
+		Judul:             "Gotong Royong Kebersihan Lingkungan",
+		Ringkasan:         "Warga bersama perangkat kelurahan mengadakan kerja bakti massal.",
+		IsiKonten:         "<p>Kerja bakti serentak diadakan di seluruh wilayah RW...</p>",
+		ThumbnailFilePath: stringPtr("uploads/public/cms/2026/kerja_bakti.jpg"),
+		IsPublished:       &isPub,
+	})
+	createNewsReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/cms/konten", bytes.NewBuffer(newsInput))
+	createNewsReq.Header.Set("Authorization", "Bearer "+auth.Token)
+	createNewsReq.Header.Set("Content-Type", "application/json")
+	createNewsResp, err := http.DefaultClient.Do(createNewsReq)
+	if err != nil || createNewsResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Create news failed: %v, status: %d", err, createNewsResp.StatusCode)
+	}
+	createNewsResp.Body.Close()
+
+	// 7. Update Profil as Admin -> 200 OK
+	profilInput, _ := json.Marshal(domain.ProfilWilayahInput{
+		NamaKelurahan: "Sukanegla Terdepan",
 		Kecamatan:     "Garut Kota",
 		KabupatenKota: "Kabupaten Garut",
-		Visi:          "Terwujudnya Pelayanan Kelurahan Sukanegla yang Unggul dan Modern.",
-		Misi:          []string{"Misi 1: Digitalisasi Layanan", "Misi 2: Partisipasi Warga"},
-		AlamatKantor:  "Jl. Sukanegla Raya No. 45",
+		Visi:          "Terwujudnya Pelayanan Digital Terdepan",
+		Misi:          []string{"Misi 1", "Misi 2"},
+		AlamatKantor:  "Jl. Baru No. 1",
 	})
-	upReq, _ := http.NewRequest(http.MethodPut, env.Server.URL+"/api/v1/cms/profil", bytes.NewBuffer(updateProfilBody))
-	upReq.Header.Set("Authorization", "Bearer "+sLoginResp.Token)
-	upReq.Header.Set("Content-Type", "application/json")
-	upResp, err := http.DefaultClient.Do(upReq)
-	if err != nil || upResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to update profil: %v (Status: %d)", err, upResp.StatusCode)
+	updateProfReq, _ := http.NewRequest(http.MethodPut, env.Server.URL+"/api/v1/cms/profil", bytes.NewBuffer(profilInput))
+	updateProfReq.Header.Set("Authorization", "Bearer "+auth.Token)
+	updateProfReq.Header.Set("Content-Type", "application/json")
+	updateProfResp, err := http.DefaultClient.Do(updateProfReq)
+	if err != nil || updateProfResp.StatusCode != http.StatusOK {
+		t.Fatalf("Update profil failed: %v, status: %d", err, updateProfResp.StatusCode)
 	}
-	upResp.Body.Close()
+	updateProfResp.Body.Close()
 
-	// 9. SEKLUR creates new Menu Item via POST /cms/menu -> 201 Created
-	createMenuBody, _ := json.Marshal(domain.NavigasiMenuInput{
+	// 8. Create Menu as Admin -> 201 Created
+	menuInput, _ := json.Marshal(domain.NavigasiMenuInput{
 		Label:  "Galeri Kegiatan",
 		URL:    "/galeri",
 		Urutan: 6,
 	})
-	cmReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/cms/menu", bytes.NewBuffer(createMenuBody))
-	cmReq.Header.Set("Authorization", "Bearer "+sLoginResp.Token)
-	cmReq.Header.Set("Content-Type", "application/json")
-	cmResp, err := http.DefaultClient.Do(cmReq)
-	if err != nil || cmResp.StatusCode != http.StatusCreated {
-		t.Fatalf("Failed to create menu item: %v (Status: %d)", err, cmResp.StatusCode)
+	createMenuReq, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/v1/cms/menu", bytes.NewBuffer(menuInput))
+	createMenuReq.Header.Set("Authorization", "Bearer "+auth.Token)
+	createMenuReq.Header.Set("Content-Type", "application/json")
+	createMenuResp, err := http.DefaultClient.Do(createMenuReq)
+	if err != nil || createMenuResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Create menu failed: %v, status: %d", err, createMenuResp.StatusCode)
 	}
-	cmResp.Body.Close()
+	createMenuResp.Body.Close()
 }

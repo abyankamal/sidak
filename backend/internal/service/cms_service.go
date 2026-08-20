@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"time"
+	"strings"
 
 	"github.com/abyankamal/sidak/backend/config"
 	"github.com/abyankamal/sidak/backend/internal/domain"
@@ -47,7 +47,8 @@ func (s *CMSService) GetPublicProfil(ctx context.Context) (*domain.ProfilWilayah
 		return nil, err
 	}
 	if p != nil && p.StrukturOrganisasiURL != nil && *p.StrukturOrganisasiURL != "" {
-		url := fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, *p.StrukturOrganisasiURL)
+		cleanPath := strings.TrimPrefix(*p.StrukturOrganisasiURL, "uploads/")
+		url := fmt.Sprintf("%s/%s", strings.TrimRight(s.cfg.StoragePublicURL, "/"), cleanPath)
 		p.StrukturOrganisasiURL = &url
 	}
 	return p, nil
@@ -65,7 +66,8 @@ func (s *CMSService) GetPublicKontenList(ctx context.Context, tipe string, page,
 
 	for i := range data {
 		if data[i].ThumbnailURL != nil && *data[i].ThumbnailURL != "" {
-			url := fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, *data[i].ThumbnailURL)
+			cleanPath := strings.TrimPrefix(*data[i].ThumbnailURL, "uploads/")
+			url := fmt.Sprintf("%s/%s", strings.TrimRight(s.cfg.StoragePublicURL, "/"), cleanPath)
 			data[i].ThumbnailURL = &url
 		}
 	}
@@ -95,7 +97,8 @@ func (s *CMSService) GetPublicKontenDetail(ctx context.Context, slug string) (*d
 	}
 
 	if k.ThumbnailURL != nil && *k.ThumbnailURL != "" {
-		url := fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, *k.ThumbnailURL)
+		cleanPath := strings.TrimPrefix(*k.ThumbnailURL, "uploads/")
+		url := fmt.Sprintf("%s/%s", strings.TrimRight(s.cfg.StoragePublicURL, "/"), cleanPath)
 		k.ThumbnailURL = &url
 	}
 
@@ -103,7 +106,7 @@ func (s *CMSService) GetPublicKontenDetail(ctx context.Context, slug string) (*d
 }
 
 // -----------------------------------------------------------------------------
-// CMS ADMIN (SEKLUR / KASI)
+// CMS ADMIN (LURAH / SEKLUR / KASI)
 // -----------------------------------------------------------------------------
 
 func (s *CMSService) UpdateProfil(ctx context.Context, input domain.ProfilWilayahInput) (*domain.StandardMessageResponse, error) {
@@ -191,19 +194,5 @@ func (s *CMSService) DeleteKonten(ctx context.Context, id string) (*domain.Stand
 	}
 	return &domain.StandardMessageResponse{
 		Message: "Konten publik berhasil dihapus",
-	}, nil
-}
-
-func (s *CMSService) GenerateMediaPresignedURL(ctx context.Context, fileName, contentType string) (*domain.PresignUploadResponse, error) {
-	year := time.Now().Year()
-	r2FilePath := fmt.Sprintf("public/cms/%d/%s", year, fileName)
-	uploadURL := fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, r2FilePath)
-	if s.cfg.R2AccountID != "" {
-		uploadURL = fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s/%s", s.cfg.R2AccountID, s.cfg.R2BucketName, r2FilePath)
-	}
-
-	return &domain.PresignUploadResponse{
-		UploadURL:  uploadURL,
-		FilePathR2: r2FilePath,
 	}, nil
 }

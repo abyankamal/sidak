@@ -2,15 +2,9 @@ package domain
 
 import "encoding/json"
 
-type PresignUploadRequest struct {
-	TransaksiID string `json:"transaksi_id"`
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
-}
-
-type PresignUploadResponse struct {
-	UploadURL  string `json:"upload_url"`
-	FilePathR2 string `json:"file_path_r2"`
+type FileUploadResponse struct {
+	FilePath string `json:"file_path"`
+	FileURL  string `json:"file_url"`
 }
 
 type SyncCommitRequest struct {

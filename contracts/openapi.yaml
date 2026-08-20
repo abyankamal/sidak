@@ -5,16 +5,18 @@ info:
   description: >
     Spesifikasi Single Source of Truth (SSOT) API untuk sistem pelayanan administrasi
     kelurahan dan portal CMS publik SIDAK. Mendukung sinkronisasi offline-first mobile,
-    verifikasi berkas, render PDF asinkron, dan manajemen konten profil wilayah.
+    verifikasi berkas, render PDF asinkron, penyimpanan berkas lokal, dan manajemen konten profil wilayah.
 servers:
   - url: /api/v1
     description: Server API Utama
 
 tags:
   - name: Autentikasi
-    description: Manajemen sesi pengguna (Kader, Kasi, Sekdes)
+    description: Manajemen sesi pengguna (Lurah, Seklur, Kasi, Kader)
+  - name: Penyimpanan Berkas
+    description: Manajemen unggah dan akses berkas lokal server
   - name: Sinkronisasi Mobile
-    description: Alur sinkronisasi data offline-first 3 fase
+    description: Alur sinkronisasi data offline-first mobile
   - name: Pelayanan & Verifikasi
     description: Manajemen template form dan verifikasi berkas permohonan
   - name: Dokumen & PDF
@@ -31,7 +33,7 @@ paths:
   /auth/login:
     post:
       tags: [Autentikasi]
-      summary: Login pengguna (Mobile Bearer JWT & Web HTTP-Only Cookie)
+      summary: Login pengguna menggunakan NIK (16 digit) atau NIP (18 digit)
       requestBody:
         required: true
         content:
@@ -85,36 +87,53 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
 
   # ============================================================================
-  # 2. SINKRONISASI MOBILE (OFFLINE-FIRST)
+  # 2. PENYIMPANAN BERKAS LOKAL (STORAGE)
   # ============================================================================
-  /sync/presigned-url:
+  /storage/upload:
     post:
-      tags: [Sinkronisasi Mobile]
-      summary: Fase 1 - Meminta Presigned PUT URL Cloudflare R2 untuk unggah berkas
+      tags: [Penyimpanan Berkas]
+      summary: Mengunggah berkas lampiran atau media ke penyimpanan lokal server
       security:
+        - CookieAuth: []
         - BearerAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PresignUploadRequest'
+              type: object
+              required: [file, category]
+              properties:
+                category:
+                  type: string
+                  enum: [lampiran, cms, dokumen]
+                  example: "lampiran"
+                transaksi_id:
+                  type: string
+                  description: ULID transaksi (wajib jika category=lampiran)
+                  example: "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                file:
+                  type: string
+                  format: binary
       responses:
-        '200':
-          description: Presigned URL berhasil dibuat
+        '201':
+          description: Berkas berhasil diunggah
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PresignUploadResponse'
+                $ref: '#/components/schemas/FileUploadResponse'
         '400':
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
 
+  # ============================================================================
+  # 3. SINKRONISASI MOBILE (OFFLINE-FIRST)
+  # ============================================================================
   /sync/commit:
     post:
       tags: [Sinkronisasi Mobile]
-      summary: Fase 3 - Commit transaksi form beserta referensi berkas R2
+      summary: Commit transaksi form beserta path referensi berkas lampiran
       security:
         - BearerAuth: []
       parameters:
@@ -152,7 +171,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   # ============================================================================
-  # 3. PELAYANAN & VERIFIKASI (ADMIN & BACKEND)
+  # 4. PELAYANAN & VERIFIKASI (ADMIN & BACKEND)
   # ============================================================================
   /template-form:
     get:
@@ -206,7 +225,7 @@ paths:
   /transaksi/{id}:
     get:
       tags: [Pelayanan & Verifikasi]
-      summary: Mengambil detail permohonan beserta Presigned GET URL lampiran
+      summary: Mengambil detail permohonan beserta link lampiran
       security:
         - CookieAuth: []
       parameters:
@@ -228,7 +247,7 @@ paths:
   /transaksi/{id}/review:
     patch:
       tags: [Pelayanan & Verifikasi]
-      summary: Memperbarui status verifikasi transaksi oleh Kasi/Sekdes
+      summary: Memperbarui status verifikasi transaksi oleh Lurah/Seklur/Kasi
       security:
         - CookieAuth: []
       parameters:
@@ -253,7 +272,7 @@ paths:
           $ref: '#/components/responses/BadRequestError'
 
   # ============================================================================
-  # 4. DOKUMEN & PDF ENGINE
+  # 5. DOKUMEN & PDF ENGINE
   # ============================================================================
   /layanan/{id}/generate-pdf:
     post:
@@ -286,7 +305,7 @@ paths:
   /dokumen/{id}/status:
     get:
       tags: [Dokumen & PDF]
-      summary: Polling status pembuatan PDF & mendapatkan Presigned Download URL
+      summary: Polling status pembuatan PDF & mendapatkan URL unduhan
       security:
         - CookieAuth: []
         - BearerAuth: []
@@ -304,7 +323,7 @@ paths:
                 $ref: '#/components/schemas/DokumenStatusResponse'
 
   # ============================================================================
-  # 5. CMS PUBLIK (UNAUTHENTICATED - ISR CACHED)
+  # 6. CMS PUBLIK (UNAUTHENTICATED - ISR CACHED)
   # ============================================================================
   /public/profil:
     get:
@@ -378,7 +397,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   # ============================================================================
-  # 6. CMS ADMIN (AUTHENTICATED SEKLUR/KASI)
+  # 7. CMS ADMIN (AUTHENTICATED LURAH/SEKLUR/KASI)
   # ============================================================================
   /cms/profil:
     put:
@@ -561,33 +580,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/StandardMessageResponse'
 
-  /cms/presigned-url:
-    post:
-      tags: [CMS Admin]
-      summary: Meminta Presigned PUT URL R2 untuk media publik (thumbnail/struktur organisasi)
-      security:
-        - CookieAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [file_name, content_type]
-              properties:
-                file_name:
-                  type: string
-                  example: "banner-posyandu.jpg"
-                content_type:
-                  type: string
-                  example: "image/jpeg"
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PresignUploadResponse'
-
 # ==============================================================================
 # KOMPONEN & SKEMA REUSABLE
 # ==============================================================================
@@ -658,13 +650,12 @@ components:
     # Auth Schemas
     LoginRequest:
       type: object
-      required: [nik, password]
+      required: [identifier, password]
       properties:
-        nik:
+        identifier:
           type: string
-          minLength: 16
-          maxLength: 16
-          example: "3205012345670001"
+          description: NIK (16 digit) untuk Kader atau NIP (18 digit) untuk Pegawai/Lurah/Seklur/Kasi
+          example: "198001012005011001"
         password:
           type: string
           format: password
@@ -683,55 +674,46 @@ components:
 
     UserResponse:
       type: object
-      required: [id, nik, nama, role]
+      required: [id, nama, role]
       properties:
         id:
           type: string
           example: "01ARZ3NDEKTSV4RRFFQ69G5FAV"
         nik:
           type: string
+          nullable: true
           example: "3205012345670001"
+        nip:
+          type: string
+          nullable: true
+          example: "198001012005011001"
         nama:
           type: string
           example: "Asep Sunandar"
         email:
           type: string
+          nullable: true
           example: "asep@kelurahan.go.id"
         role:
           type: string
-          enum: [SEKLUR, KASI, KADER]
+          enum: [LURAH, SEKLUR, KASI, KADER]
           example: "KADER"
 
+    # Storage Schemas
+    FileUploadResponse:
+      type: object
+      required: [file_path, file_url]
+      properties:
+        file_path:
+          type: string
+          description: Path relatif penyimpanan lokal
+          example: "uploads/lampiran/3205019876540002/01ARZ_ktp.jpg"
+        file_url:
+          type: string
+          description: URL publik untuk akses berkas
+          example: "http://localhost:8080/uploads/lampiran/3205019876540002/01ARZ_ktp.jpg"
+
     # Sync Schemas
-    PresignUploadRequest:
-      type: object
-      required: [transaksi_id, file_name, content_type]
-      properties:
-        transaksi_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-          example: "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-        file_name:
-          type: string
-          example: "ktp.jpg"
-        content_type:
-          type: string
-          example: "image/jpeg"
-
-    PresignUploadResponse:
-      type: object
-      required: [upload_url, file_path_r2]
-      properties:
-        upload_url:
-          type: string
-          description: Target URL HTTP PUT langsung ke Cloudflare R2
-          example: "https://r2.cloudflarestorage.com/sidak-bucket/lampiran/3205...?"
-        file_path_r2:
-          type: string
-          description: Object key identifikasi berkas di bucket R2
-          example: "lampiran/3205012345670001/01ARZ3NDEKTSV4RRFFQ69G5FAV_ktp.jpg"
-
     SyncCommitRequest:
       type: object
       required: [transaksi_id, warga_nik, layanan_id, data_isian]
@@ -760,7 +742,7 @@ components:
           type: array
           items:
             type: string
-          example: ["lampiran/3205019876540002/01ARZ_ktp.jpg"]
+          example: ["uploads/lampiran/3205019876540002/01ARZ_ktp.jpg"]
 
     # Template Form & Transaksi Pelayanan
     TemplateForm:
@@ -829,11 +811,11 @@ components:
           example: "SKTM"
         data_isian:
           type: object
-        lampiran_presigned_urls:
+        lampiran_urls:
           type: array
           items:
             type: string
-          description: Presigned GET URL berdurasi 5 menit untuk preview foto di admin
+          description: URL unduhan berkas lampiran
         status:
           type: string
           enum: [menunggu_review, sudah_di_review, butuh_revisi]
@@ -877,7 +859,7 @@ components:
         download_url:
           type: string
           nullable: true
-          description: Presigned GET URL langsung ke R2 jika status READY
+          description: URL unduhan file PDF jika status READY
 
     # Profil Wilayah Schemas
     ProfilWilayah:
@@ -918,7 +900,7 @@ components:
         struktur_organisasi_url:
           type: string
           nullable: true
-          example: "https://cdn.kelurahan.go.id/public/cms/struktur.png"
+          example: "http://localhost:8080/uploads/public/cms/struktur.png"
 
     ProfilWilayahInput:
       type: object
@@ -944,7 +926,7 @@ components:
           type: string
         kontak_email:
           type: string
-        struktur_organisasi_r2_key:
+        struktur_organisasi_file_path:
           type: string
           nullable: true
 
@@ -1132,10 +1114,10 @@ components:
         isi_konten:
           type: string
           example: "<p>Diberitahukan kepada seluruh warga RW 04 bahwa pelayanan...</p>"
-        thumbnail_r2_key:
+        thumbnail_file_path:
           type: string
           nullable: true
-          example: "public/cms/2026/jadwal-keliling_thumb.jpg"
+          example: "uploads/public/cms/2026/jadwal-keliling_thumb.jpg"
         is_published:
           type: boolean
           default: false

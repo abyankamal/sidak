@@ -71,6 +71,8 @@ backend/vendor/
 *.sqlite-journal
 *.dump
 *.sql.gz
+uploads/
+*/uploads/
 
 # ------------------------------------------------------------------------------
 # 4. Web (Next.js App Router)

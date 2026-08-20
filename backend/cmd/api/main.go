@@ -32,7 +32,6 @@ func main() {
 		log.Fatalf("Invalid database connection URL: %v", err)
 	}
 
-	// Optimized connection pool parameters for 2 vCPU / 8 GB VPS
 	poolConfig.MaxConns = 10
 	poolConfig.MinConns = 2
 	poolConfig.MaxConnIdleTime = 5 * time.Minute
@@ -66,6 +65,7 @@ func main() {
 	}
 
 	authService := service.NewAuthService(userRepo, cfg.AppSecret)
+	storageService := service.NewStorageService(cfg)
 	syncService := service.NewSyncService(transaksiRepo, schemaCache, cfg)
 	transaksiService := service.NewTransaksiService(transaksiRepo, cfg)
 	cmsService := service.NewCMSService(profilRepo, menuRepo, kontenRepo, cfg)
@@ -74,6 +74,7 @@ func main() {
 	router := handler.NewRouter(handler.RouterParams{
 		Config:           cfg,
 		AuthService:      authService,
+		StorageService:   storageService,
 		SyncService:      syncService,
 		TransaksiService: transaksiService,
 		CMSService:       cmsService,

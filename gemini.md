@@ -6,7 +6,7 @@ SIDAK (Sistem Data Kewilayahan) adalah sistem digital terpadu administrasi kelur
 ### Prinsip Fondasi:
 1. **Contract-Driven First:** Spesifikasi API di `contracts/openapi.yaml` adalah *Single Source of Truth (SSOT)* mutlak. Kode klien dan server tidak boleh menyimpang dari kontrak ini.
 2. **Offline-First Resilience:** Aplikasi mobile dirancang tahan terhadap ketiadaan jaringan dengan memperlakukan SQLite lokal murni sebagai *Staging Area* & *Job Queue*.
-3. **Zero-Proxy Static Storage:** Backend Golang tidak boleh menjadi perantara pengunduhan/pengunggahan berkas KTP/KK/PDF/Thumbnail. Semua lalu lintas berkas statis dialihkan langsung ke Cloudflare R2 via *Presigned URL*.
+3. **Optimized Local Static Storage:** Penyimpanan berkas statis (lampiran warga & media publik) dikelola langsung di volume server lokal terisolasi (`/uploads/`) dan disajikan secara efisien.
 4. **Asynchronous Heavy I/O:** Pembuatan PDF via Gotenberg bersifat asinkron dan dibatasi bebannya agar tidak membebani komputasi server.
 5. **Hybrid Web Architecture (Single Instance):** Portal publik (*company profile*) dan web admin disatukan dalam satu *instance* Next.js menggunakan *Route Groups* (`app/(public)` dan `app/(admin)`) untuk menghemat konsumsi RAM server.
 
@@ -17,8 +17,8 @@ Semua keputusan penulisan kode backend, frontend, dan konfigurasi deployment har
 - **Server VPS:** Monolith node dengan spesifikasi **2 vCPU, 8 GB RAM, Ubuntu 24.04 LTS**.
 - **Gotenberg Limit:** Maksimal alokasi 0.75 vCPU, 1 concurrent worker di level Golang.
 - **Database:** PostgreSQL 16 dengan skema hibrida (Relasional + JSONB terindeks GIN).
-- **Reverse Proxy:** Caddy v2 (Otomatisasi HTTPS + Subdomain routing).
-- **Storage:** Cloudflare R2 (Protokol AWS S3 Compatible).
+- **Reverse Proxy & Static:** Caddy v2 (Otomatisasi HTTPS + Static file serving + Subdomain routing).
+- **Storage:** Local VPS Volume Storage (`/uploads/`).
 - **Caching Strategy:** Incremental Static Regeneration (ISR `revalidate = 300`) untuk halaman publik guna mengisolasi beban lalu lintas warga dari PostgreSQL.
 
 ---
@@ -73,20 +73,20 @@ Setiap agen AI yang memproses tugas di modul mana pun WAJIB mematuhi aturan univ
 4. **On-Demand Cache Invalidation:** Setiap pembaruan data menu, profil, atau berita di dasbor admin wajib memicu `revalidatePath()` di Next.js agar konten publik terbarui tanpa mematikan *cache* ISR.
 
 ### C. Otentikasi, RBAC Sederhana & Status Workflow
-1. **Simplified RBAC:** Peran pengguna (`role`) wajib diintegrasikan langsung ke dalam tabel utama `users` (`SEKLUR`, `KASI`, `KADER`). DILARANG membuat tabel terpisah seperti `jabatan` atau hierarki relasional berlebih.
+1. **Simplified RBAC:** Peran pengguna (`role`) wajib diintegrasikan langsung ke dalam tabel utama `users` (`LURAH`, `SEKLUR`, `KASI`, `KADER`). Autentikasi mendukung `identifier` (NIK 16 digit atau NIP 18 digit untuk PNS) dan kata sandi tanpa ketergantungan email.
 2. **Workflow Review State Machine:** Status alur dokumen pelayanan menggunakan alur *review* catatan:
    - `menunggu_review` (Status awal setelah data masuk/sinkron)
-   - `sudah_di_review` (Disetujui/Diverifikasi oleh Kasi/Sekdes dengan catatan)
+   - `sudah_di_review` (Disetujui/Diverifikasi oleh Lurah/Seklur/Kasi dengan catatan)
    - `butuh_revisi` (Memerlukan perbaikan berkas dari warga/kader)
    - DILARANG menggunakan mekanisme penolakan mutlak (*hard rejection*) tanpa riwayat catatan review.
 
 ### D. Keamanan & Akses Data Sensitif (PII) vs Publik
-1. **Pemisahan Akses R2:**
-   - *Private Storage (Strict 5 Min Presigned URL):* Lampiran KTP, KK, berkas rahasia warga, dan PDF cetak surat.
-   - *Public/CDN Storage:* Thumbnail berita publik dan bagan struktur organisasi kelurahan.
-2. **Isolasi Path Penyimpanan:** Format path berkas di R2:
-   - Dokumen Warga: `lampiran/{warga_nik}/{transaksi_id}_{file_name}`
-   - Media Publik: `public/cms/{tahun}/{slug}_{file_name}`
+1. **Pemisahan Akses Berkas Lokal:**
+   - *Private Storage:* Lampiran KTP, KK, berkas rahasia warga, dan PDF cetak surat hanya dapat diakses melalui endpoint terproteksi autentikasi.
+   - *Public Storage:* Thumbnail berita publik dan bagan struktur organisasi kelurahan disajikan secara publik.
+2. **Isolasi Path Penyimpanan Lokal:** Format path berkas:
+   - Dokumen Warga: `uploads/lampiran/{warga_nik}/{transaksi_id}_{file_name}`
+   - Media Publik: `uploads/public/cms/{tahun}/{slug}_{file_name}`
 
 ### E. Efisiensi Komputasi & I/O
 1. **Bypass VPS File Traffic:** Klien (Next.js & Flutter) wajib mengunggah dan mengunduh berkas langsung dari Cloudflare R2. Backend Golang DILARANG bertindak sebagai *file proxy* atau penyimpan berkas sementara di disk VPS.

@@ -17,7 +17,8 @@ type ErrorResponse struct {
 
 type User struct {
 	ID           string    `json:"id"`
-	NIK          string    `json:"nik"`
+	NIK          *string   `json:"nik,omitempty"`
+	NIP          *string   `json:"nip,omitempty"`
 	Nama         string    `json:"nama"`
 	Email        *string   `json:"email,omitempty"`
 	PasswordHash string    `json:"-"`
@@ -28,7 +29,8 @@ type User struct {
 
 type UserResponse struct {
 	ID    string  `json:"id"`
-	NIK   string  `json:"nik"`
+	NIK   *string `json:"nik,omitempty"`
+	NIP   *string `json:"nip,omitempty"`
 	Nama  string  `json:"nama"`
 	Email *string `json:"email,omitempty"`
 	Role  string  `json:"role"`
@@ -38,6 +40,7 @@ func (u *User) ToResponse() UserResponse {
 	return UserResponse{
 		ID:    u.ID,
 		NIK:   u.NIK,
+		NIP:   u.NIP,
 		Nama:  u.Nama,
 		Email: u.Email,
 		Role:  u.Role,
@@ -45,8 +48,8 @@ func (u *User) ToResponse() UserResponse {
 }
 
 type LoginRequest struct {
-	NIK      string `json:"nik"`
-	Password string `json:"password"`
+	Identifier string `json:"identifier"` // NIK 16 digit atau NIP 18 digit
+	Password   string `json:"password"`
 }
 
 type LoginResponse struct {
@@ -55,9 +58,10 @@ type LoginResponse struct {
 }
 
 type AuthClaims struct {
-	UserID string `json:"user_id"`
-	NIK    string `json:"nik"`
-	Nama   string `json:"nama"`
-	Role   string `json:"role"`
+	UserID string  `json:"user_id"`
+	NIK    *string `json:"nik,omitempty"`
+	NIP    *string `json:"nip,omitempty"`
+	Nama   string  `json:"nama"`
+	Role   string  `json:"role"`
 	jwt.RegisteredClaims
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ type TestEnv struct {
 	Router           http.Handler
 	Server           *httptest.Server
 	AuthService      *service.AuthService
+	StorageService   *service.StorageService
 	SyncService      *service.SyncService
 	TransaksiService *service.TransaksiService
 	CMSService       *service.CMSService
@@ -31,6 +33,9 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Use temporary test uploads directory
+	cfg.StorageBasePath = t.TempDir()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -64,6 +69,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	}
 
 	authService := service.NewAuthService(userRepo, cfg.AppSecret)
+	storageService := service.NewStorageService(cfg)
 	syncService := service.NewSyncService(transaksiRepo, schemaCache, cfg)
 	transaksiService := service.NewTransaksiService(transaksiRepo, cfg)
 	cmsService := service.NewCMSService(profilRepo, menuRepo, kontenRepo, cfg)
@@ -71,6 +77,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	router := handler.NewRouter(handler.RouterParams{
 		Config:           cfg,
 		AuthService:      authService,
+		StorageService:   storageService,
 		SyncService:      syncService,
 		TransaksiService: transaksiService,
 		CMSService:       cmsService,
@@ -79,12 +86,31 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 
 	ts := httptest.NewServer(router)
 
-	// Clean test transactions created during test runs
+	// Clean test transactions created during test runs & reset singleton profil
 	_, _ = dbPool.Exec(ctx, "DELETE FROM transaksi_pelayanan WHERE warga_nik LIKE '320599%' OR warga_nik LIKE '32050199%' OR warga_nik LIKE '32050177%' OR warga_nik LIKE '32050166%'")
+	_, _ = dbPool.Exec(ctx, `
+		UPDATE profil_wilayah
+		SET nama_kelurahan = 'Sukanegla',
+		    kecamatan = 'Garut Kota',
+		    kabupaten_kota = 'Kabupaten Garut',
+		    visi = 'Terwujudnya Pelayanan Kelurahan Sukanegla yang Bersih, Prima, Responsif, dan Terpercaya Berbasis Digital.',
+		    alamat_kantor = 'Jl. Sukanegla Raya No. 45, RT 02 / RW 03, Kelurahan Sukanegla, Garut Kota, Jawa Barat 44118'
+		WHERE id = 1
+	`)
 
 	t.Cleanup(func() {
 		ts.Close()
 		_, _ = dbPool.Exec(context.Background(), "DELETE FROM transaksi_pelayanan WHERE warga_nik LIKE '320599%' OR warga_nik LIKE '32050199%' OR warga_nik LIKE '32050177%' OR warga_nik LIKE '32050166%'")
+		_, _ = dbPool.Exec(context.Background(), `
+			UPDATE profil_wilayah
+			SET nama_kelurahan = 'Sukanegla',
+			    kecamatan = 'Garut Kota',
+			    kabupaten_kota = 'Kabupaten Garut',
+			    visi = 'Terwujudnya Pelayanan Kelurahan Sukanegla yang Bersih, Prima, Responsif, dan Terpercaya Berbasis Digital.',
+			    alamat_kantor = 'Jl. Sukanegla Raya No. 45, RT 02 / RW 03, Kelurahan Sukanegla, Garut Kota, Jawa Barat 44118'
+			WHERE id = 1
+		`)
+		_ = os.RemoveAll(cfg.StorageBasePath)
 		dbPool.Close()
 	})
 
@@ -94,6 +120,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		Router:           router,
 		Server:           ts,
 		AuthService:      authService,
+		StorageService:   storageService,
 		SyncService:      syncService,
 		TransaksiService: transaksiService,
 		CMSService:       cmsService,

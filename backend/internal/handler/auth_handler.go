@@ -25,15 +25,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.NIK == "" || req.Password == "" {
-		Error(w, http.StatusBadRequest, "NIK dan kata sandi wajib diisi")
+	if req.Identifier == "" || req.Password == "" {
+		Error(w, http.StatusBadRequest, "NIK/NIP dan kata sandi wajib diisi")
 		return
 	}
 
 	resp, err := h.authService.Login(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) {
-			Error(w, http.StatusUnauthorized, "NIK atau kata sandi tidak sesuai")
+			Error(w, http.StatusUnauthorized, "NIK/NIP atau kata sandi tidak sesuai")
 			return
 		}
 		Error(w, http.StatusInternalServerError, "Gagal memproses login pengguna")
@@ -76,6 +76,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userResp := domain.UserResponse{
 		ID:   claims.UserID,
 		NIK:  claims.NIK,
+		NIP:  claims.NIP,
 		Nama: claims.Nama,
 		Role: claims.Role,
 	}

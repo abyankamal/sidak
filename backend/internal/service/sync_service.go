@@ -33,22 +33,6 @@ func NewSyncService(transaksiRepo *repository.TransaksiRepository, schemaCache *
 	}
 }
 
-func (s *SyncService) GeneratePresignedUpload(ctx context.Context, req domain.PresignUploadRequest, wargaNIK string) (*domain.PresignUploadResponse, error) {
-	// Storage path isolation: lampiran/{warga_nik}/{transaksi_id}_{file_name}
-	r2FilePath := fmt.Sprintf("lampiran/%s/%s_%s", wargaNIK, req.TransaksiID, req.FileName)
-
-	// Direct upload target URL (Cloudflare R2)
-	uploadURL := fmt.Sprintf("%s/%s", s.cfg.R2PublicURL, r2FilePath)
-	if s.cfg.R2AccountID != "" {
-		uploadURL = fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s/%s", s.cfg.R2AccountID, s.cfg.R2BucketName, r2FilePath)
-	}
-
-	return &domain.PresignUploadResponse{
-		UploadURL:  uploadURL,
-		FilePathR2: r2FilePath,
-	}, nil
-}
-
 func (s *SyncService) Commit(ctx context.Context, idempotencyKey string, req domain.SyncCommitRequest) (*domain.StandardMessageResponse, error) {
 	if idempotencyKey == "" {
 		idempotencyKey = req.TransaksiID

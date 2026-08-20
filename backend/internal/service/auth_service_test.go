@@ -27,10 +27,11 @@ func TestAuthServiceUnit(t *testing.T) {
 		t.Errorf("Expected compare error for wrong password")
 	}
 
-	// 2. Test JWT Token Generation & Parsing
+	// 2. Test JWT Token Generation & Parsing (PNS with NIP)
+	nip := "198001012005011001"
 	testUser := &domain.User{
 		ID:        "01ARZ3NDEKTSV4RRFFQ69G5001",
-		NIK:       "3205010101800001",
+		NIP:       &nip,
 		Nama:      "Drs. H. Mulyadi (Seklur)",
 		Role:      "SEKLUR",
 		CreatedAt: time.Now(),
@@ -52,6 +53,9 @@ func TestAuthServiceUnit(t *testing.T) {
 
 	if claims.UserID != testUser.ID {
 		t.Errorf("Expected UserID %s, got %s", testUser.ID, claims.UserID)
+	}
+	if claims.NIP == nil || *claims.NIP != nip {
+		t.Errorf("Expected NIP %s", nip)
 	}
 	if claims.Role != "SEKLUR" {
 		t.Errorf("Expected Role SEKLUR, got %s", claims.Role)

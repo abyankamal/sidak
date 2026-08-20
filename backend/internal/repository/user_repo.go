@@ -17,15 +17,15 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) GetByNIK(ctx context.Context, nik string) (*domain.User, error) {
+func (r *UserRepository) GetByIdentifier(ctx context.Context, identifier string) (*domain.User, error) {
 	query := `
-		SELECT id, nik, nama, email, password_hash, role, created_at, updated_at
+		SELECT id, nik, nip, nama, email, password_hash, role, created_at, updated_at
 		FROM users
-		WHERE nik = $1
+		WHERE nik = $1 OR nip = $1
 	`
 	var u domain.User
-	err := r.db.QueryRow(ctx, query, nik).Scan(
-		&u.ID, &u.NIK, &u.Nama, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
+	err := r.db.QueryRow(ctx, query, identifier).Scan(
+		&u.ID, &u.NIK, &u.NIP, &u.Nama, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -36,15 +36,19 @@ func (r *UserRepository) GetByNIK(ctx context.Context, nik string) (*domain.User
 	return &u, nil
 }
 
+func (r *UserRepository) GetByNIK(ctx context.Context, nik string) (*domain.User, error) {
+	return r.GetByIdentifier(ctx, nik)
+}
+
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	query := `
-		SELECT id, nik, nama, email, password_hash, role, created_at, updated_at
+		SELECT id, nik, nip, nama, email, password_hash, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	var u domain.User
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&u.ID, &u.NIK, &u.Nama, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
+		&u.ID, &u.NIK, &u.NIP, &u.Nama, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

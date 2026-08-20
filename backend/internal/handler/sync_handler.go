@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/abyankamal/sidak/backend/internal/domain"
-	"github.com/abyankamal/sidak/backend/internal/middleware"
 	"github.com/abyankamal/sidak/backend/internal/service"
 )
 
@@ -16,33 +15,6 @@ type SyncHandler struct {
 
 func NewSyncHandler(syncService *service.SyncService) *SyncHandler {
 	return &SyncHandler{syncService: syncService}
-}
-
-func (h *SyncHandler) RequestPresignedURL(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserClaims(r)
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "Sesi tidak sah")
-		return
-	}
-
-	var req domain.PresignUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		Error(w, http.StatusBadRequest, "Payload request presigned URL tidak valid")
-		return
-	}
-
-	if req.TransaksiID == "" || req.FileName == "" || req.ContentType == "" {
-		Error(w, http.StatusBadRequest, "transaksi_id, file_name, dan content_type wajib diisi")
-		return
-	}
-
-	resp, err := h.syncService.GeneratePresignedUpload(r.Context(), req, claims.NIK)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "Gagal membuat presigned upload URL")
-		return
-	}
-
-	JSON(w, http.StatusOK, resp)
 }
 
 func (h *SyncHandler) Commit(w http.ResponseWriter, r *http.Request) {

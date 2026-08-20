@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("NIK atau kata sandi tidak sesuai")
+	ErrInvalidCredentials = errors.New("NIK/NIP atau kata sandi tidak sesuai")
 	ErrInvalidToken       = errors.New("token otentikasi tidak valid atau sudah kedaluwarsa")
 )
 
@@ -29,7 +29,7 @@ func NewAuthService(userRepo *repository.UserRepository, jwtSecret string) *Auth
 }
 
 func (s *AuthService) Login(ctx context.Context, req domain.LoginRequest) (*domain.LoginResponse, error) {
-	user, err := s.userRepo.GetByNIK(ctx, req.NIK)
+	user, err := s.userRepo.GetByIdentifier(ctx, req.Identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +56,7 @@ func (s *AuthService) GenerateToken(user *domain.User) (string, error) {
 	claims := &domain.AuthClaims{
 		UserID: user.ID,
 		NIK:    user.NIK,
+		NIP:    user.NIP,
 		Nama:   user.Nama,
 		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
