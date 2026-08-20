@@ -3,7 +3,7 @@
 -- =============================================================================
 
 -- 1. Seed Users (Default password: AdminSidak2026!)
--- Hash bcrypt cost 10: $2a$10$T81xQvL80mRjW2P2Z8t3a.3Rz9d5gqM8uKj2F7eR1H9vV4W6s8T7e
+-- Hash bcrypt cost 10: $2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO
 INSERT INTO users (id, nik, nama, email, password_hash, role, created_at, updated_at)
 VALUES 
     (
@@ -11,7 +11,7 @@ VALUES
         '3205010101800001', 
         'Drs. H. Mulyadi (Seklur)', 
         'seklur@sukanegla.desa.id', 
-        '$2a$10$T81xQvL80mRjW2P2Z8t3a.3Rz9d5gqM8uKj2F7eR1H9vV4W6s8T7e', 
+        '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
         'SEKLUR', 
         NOW(), 
         NOW()
@@ -21,7 +21,7 @@ VALUES
         '3205010202850002', 
         'Siti Nurhaliza, S.AP (Kasi Pelayanan)', 
         'kasi@sukanegla.desa.id', 
-        '$2a$10$T81xQvL80mRjW2P2Z8t3a.3Rz9d5gqM8uKj2F7eR1H9vV4W6s8T7e', 
+        '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
         'KASI', 
         NOW(), 
         NOW()
@@ -31,7 +31,7 @@ VALUES
         '3205010303920003', 
         'Asep Sunandar (Kader RW 01)', 
         'kader01@sukanegla.desa.id', 
-        '$2a$10$T81xQvL80mRjW2P2Z8t3a.3Rz9d5gqM8uKj2F7eR1H9vV4W6s8T7e', 
+        '$2a$10$ArSAP1oXiMBa1Hev1aXgYeTcikMxPmTB0QHTnrwd4KRYOucclLHJO', 
         'KADER', 
         NOW(), 
         NOW()

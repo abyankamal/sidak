@@ -1,0 +1,134 @@
+package handler
+
+import (
+	"net/http"
+
+	"github.com/abyankamal/sidak/backend/config"
+	"github.com/abyankamal/sidak/backend/internal/middleware"
+	"github.com/abyankamal/sidak/backend/internal/service"
+	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+)
+
+type RouterParams struct {
+	Config           *config.Config
+	AuthService      *service.AuthService
+	SyncService      *service.SyncService
+	TransaksiService *service.TransaksiService
+	CMSService       *service.CMSService
+	TemplateHandler  *TemplateHandler
+}
+
+func NewRouter(p RouterParams) http.Handler {
+	r := chi.NewRouter()
+
+	// Global Middlewares
+	r.Use(chiMiddleware.RequestID)
+	r.Use(chiMiddleware.RealIP)
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
+
+	// CORS Configuration
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", p.Config.WebPublicURL, p.Config.WebAdminURL},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Idempotency-Key", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link", "Set-Cookie"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+
+	// Handlers
+	authHandler := NewAuthHandler(p.AuthService)
+	syncHandler := NewSyncHandler(p.SyncService)
+	transaksiHandler := NewTransaksiHandler(p.TransaksiService)
+	cmsPublicHandler := NewCMSPublicHandler(p.CMSService)
+	cmsAdminHandler := NewCMSAdminHandler(p.CMSService)
+
+	// API v1 Routing
+	r.Route("/api/v1", func(v1 chi.Router) {
+		// ---------------------------------------------------------------------
+		// 1. AUTENTIKASI
+		// ---------------------------------------------------------------------
+		v1.Post("/auth/login", authHandler.Login)
+
+		v1.Group(func(auth chi.Router) {
+			auth.Use(middleware.AuthMiddleware(p.AuthService))
+			auth.Post("/auth/logout", authHandler.Logout)
+			auth.Get("/auth/me", authHandler.Me)
+		})
+
+		// ---------------------------------------------------------------------
+		// 2. SINKRONISASI MOBILE (OFFLINE-FIRST)
+		// ---------------------------------------------------------------------
+		v1.Group(func(sync chi.Router) {
+			sync.Use(middleware.AuthMiddleware(p.AuthService))
+			sync.Post("/sync/presigned-url", syncHandler.RequestPresignedURL)
+			sync.Post("/sync/commit", syncHandler.Commit)
+		})
+
+		// ---------------------------------------------------------------------
+		// 3. PELAYANAN & VERIFIKASI
+		// ---------------------------------------------------------------------
+		v1.Group(func(pelayanan chi.Router) {
+			pelayanan.Use(middleware.AuthMiddleware(p.AuthService))
+			pelayanan.Get("/template-form", p.TemplateHandler.ListTemplates)
+			pelayanan.Get("/transaksi", transaksiHandler.List)
+			pelayanan.Get("/transaksi/{id}", transaksiHandler.GetDetail)
+			pelayanan.Patch("/transaksi/{id}/review", transaksiHandler.Review)
+		})
+
+		// ---------------------------------------------------------------------
+		// 4. DOKUMEN & PDF (Placeholders for Fase 2)
+		// ---------------------------------------------------------------------
+		v1.Group(func(doc chi.Router) {
+			doc.Use(middleware.AuthMiddleware(p.AuthService))
+			doc.Post("/layanan/{id}/generate-pdf", func(w http.ResponseWriter, r *http.Request) {
+				id := chi.URLParam(r, "id")
+				JSON(w, http.StatusAccepted, map[string]any{
+					"job_id": id,
+					"status": "PROCESSING",
+				})
+			})
+			doc.Get("/dokumen/{id}/status", func(w http.ResponseWriter, r *http.Request) {
+				id := chi.URLParam(r, "id")
+				JSON(w, http.StatusOK, map[string]any{
+					"dokumen_id": id,
+					"status":     "PROCESSING",
+				})
+			})
+		})
+
+		// ---------------------------------------------------------------------
+		// 5. CMS PUBLIK (UNAUTHENTICATED)
+		// ---------------------------------------------------------------------
+		v1.Get("/public/profil", cmsPublicHandler.GetProfil)
+		v1.Get("/public/menu", cmsPublicHandler.GetMenu)
+		v1.Get("/public/konten", cmsPublicHandler.GetKontenList)
+		v1.Get("/public/konten/{slug}", cmsPublicHandler.GetKontenDetail)
+
+		// ---------------------------------------------------------------------
+		// 6. CMS ADMIN (AUTHENTICATED SEKLUR/KASI)
+		// ---------------------------------------------------------------------
+		v1.Group(func(admin chi.Router) {
+			admin.Use(middleware.AuthMiddleware(p.AuthService))
+			admin.Use(middleware.RequireRoles("SEKLUR", "KASI"))
+
+			admin.Put("/cms/profil", cmsAdminHandler.UpdateProfil)
+			admin.Get("/cms/menu", cmsAdminHandler.ListMenu)
+			admin.Post("/cms/menu", cmsAdminHandler.CreateMenu)
+			admin.Put("/cms/menu/{id}", cmsAdminHandler.UpdateMenu)
+			admin.Delete("/cms/menu/{id}", cmsAdminHandler.DeleteMenu)
+
+			admin.Get("/cms/konten", cmsAdminHandler.ListKonten)
+			admin.Post("/cms/konten", cmsAdminHandler.CreateKonten)
+			admin.Put("/cms/konten/{id}", cmsAdminHandler.UpdateKonten)
+			admin.Delete("/cms/konten/{id}", cmsAdminHandler.DeleteKonten)
+
+			admin.Post("/cms/presigned-url", cmsAdminHandler.PresignedURL)
+		})
+	})
+
+	return r
+}
