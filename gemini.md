@@ -73,7 +73,7 @@ Setiap agen AI yang memproses tugas di modul mana pun WAJIB mematuhi aturan univ
 4. **On-Demand Cache Invalidation:** Setiap pembaruan data menu, profil, atau berita di dasbor admin wajib memicu `revalidatePath()` di Next.js agar konten publik terbarui tanpa mematikan *cache* ISR.
 
 ### C. Otentikasi, RBAC Sederhana & Status Workflow
-1. **Simplified RBAC:** Peran pengguna (`role`) wajib diintegrasikan langsung ke dalam tabel utama `users` (`SEKDES`, `KASI`, `KADER`). DILARANG membuat tabel terpisah seperti `jabatan` atau hierarki relasional berlebih.
+1. **Simplified RBAC:** Peran pengguna (`role`) wajib diintegrasikan langsung ke dalam tabel utama `users` (`SEKLUR`, `KASI`, `KADER`). DILARANG membuat tabel terpisah seperti `jabatan` atau hierarki relasional berlebih.
 2. **Workflow Review State Machine:** Status alur dokumen pelayanan menggunakan alur *review* catatan:
    - `menunggu_review` (Status awal setelah data masuk/sinkron)
    - `sudah_di_review` (Disetujui/Diverifikasi oleh Kasi/Sekdes dengan catatan)

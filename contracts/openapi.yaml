@@ -378,7 +378,7 @@ paths:
           $ref: '#/components/responses/NotFoundError'
 
   # ============================================================================
-  # 6. CMS ADMIN (AUTHENTICATED SEKDES/KASI)
+  # 6. CMS ADMIN (AUTHENTICATED SEKLUR/KASI)
   # ============================================================================
   /cms/profil:
     put:
@@ -699,7 +699,7 @@ components:
           example: "asep@kelurahan.go.id"
         role:
           type: string
-          enum: [SEKDES, KASI, KADER]
+          enum: [SEKLUR, KASI, KADER]
           example: "KADER"
 
     # Sync Schemas
