@@ -65,12 +65,19 @@ Autentikasi mendukung login fleksibel menggunakan **NIK (16 Digit)** atau **NIP 
 ## 🛠️ Prasyarat & Instalasi Lokal
 
 ### 1. Kebutuhan Sistem
-- **Docker & Docker Compose**
+- **Docker & Docker Compose** (atau **Colima** untuk macOS ringan)
 - **Go 1.22+**
 - **Node.js 20+** (untuk modul Web Next.js)
 - **Flutter 3.x** (untuk modul Mobile)
 
 ### 2. Menjalankan Infrastruktur (PostgreSQL & Gotenberg)
+
+Bagi pengguna macOS dengan Colima:
+```bash
+# Nyalakan runtime Colima
+make colima-start
+```
+
 Salin berkas konfigurasi lingkungan:
 ```bash
 cp .env.example .env
