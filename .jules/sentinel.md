@@ -1,0 +1,4 @@
+## 2026-03-30 - Path Traversal Prevention in Local Storage Service
+**Vulnerability:** User-controllable request parameters (`wargaNIK`, `transaksiID`, `header.Filename`) were directly concatenated into file paths without path boundary checks or parameter sanitization, allowing potential path traversal attacks.
+**Learning:** `filepath.Join` cleans path relative components but still evaluates `..` when constructed with user input. Using `filepath.Base` on user parameters combined with checking target absolute paths against `filepath.Abs(StorageBasePath)` guarantees strict directory containment.
+**Prevention:** Always sanitize filename/directory parameters with `filepath.Base` and verify `strings.HasPrefix(targetAbsPath, baseAbsPath + string(os.PathSeparator))` before `os.MkdirAll` or `os.Create`.
