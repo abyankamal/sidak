@@ -18,6 +18,7 @@ import (
 var (
 	ErrInvalidCategory = errors.New("kategori upload tidak valid (pilihan: lampiran, cms, dokumen)")
 	ErrFileTooLarge    = errors.New("ukuran berkas melebihi batas maksimum 10MB")
+	ErrPathTraversal   = errors.New("deteksi manipulasi jalur berkas (path traversal)")
 )
 
 type StorageService struct {
@@ -37,19 +38,29 @@ func (s *StorageService) SaveUpload(ctx context.Context, header *multipart.FileH
 	cleanFileName := filepath.Base(header.Filename)
 	cleanFileName = strings.ReplaceAll(cleanFileName, " ", "_")
 
+	safeWargaNIK := filepath.Base(wargaNIK)
+	if safeWargaNIK == "." || safeWargaNIK == "/" || safeWargaNIK == "\\" {
+		safeWargaNIK = "umum"
+	}
+
+	safeTransaksiID := filepath.Base(transaksiID)
+	if safeTransaksiID == "." || safeTransaksiID == "/" || safeTransaksiID == "\\" {
+		safeTransaksiID = "draft"
+	}
+
 	var relDir string
 	var relFilePath string
 
 	switch category {
 	case "lampiran":
 		if wargaNIK == "" {
-			wargaNIK = "umum"
+			safeWargaNIK = "umum"
 		}
 		if transaksiID == "" {
-			transaksiID = "draft"
+			safeTransaksiID = "draft"
 		}
-		relDir = filepath.Join("lampiran", wargaNIK)
-		relFilePath = filepath.Join(relDir, fmt.Sprintf("%s_%s", transaksiID, cleanFileName))
+		relDir = filepath.Join("lampiran", safeWargaNIK)
+		relFilePath = filepath.Join(relDir, fmt.Sprintf("%s_%s", safeTransaksiID, cleanFileName))
 
 	case "cms":
 		year := fmt.Sprintf("%d", time.Now().Year())
@@ -58,23 +69,31 @@ func (s *StorageService) SaveUpload(ctx context.Context, header *multipart.FileH
 
 	case "dokumen":
 		if transaksiID == "" {
-			transaksiID = "draft"
+			safeTransaksiID = "draft"
 		}
 		relDir = "dokumen"
-		relFilePath = filepath.Join(relDir, fmt.Sprintf("%s_%s", transaksiID, cleanFileName))
+		relFilePath = filepath.Join(relDir, fmt.Sprintf("%s_%s", safeTransaksiID, cleanFileName))
 
 	default:
 		return nil, ErrInvalidCategory
 	}
 
-	// Target absolute directory
-	targetDir := filepath.Join(s.cfg.StorageBasePath, relDir)
+	baseAbsPath, err := filepath.Abs(s.cfg.StorageBasePath)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mendapatkan path absolut storage: %w", err)
+	}
+
+	targetAbsPath := filepath.Join(baseAbsPath, relFilePath)
+	targetAbsPath = filepath.Clean(targetAbsPath)
+
+	if !strings.HasPrefix(targetAbsPath, baseAbsPath+string(os.PathSeparator)) && targetAbsPath != baseAbsPath {
+		return nil, ErrPathTraversal
+	}
+
+	targetDir := filepath.Dir(targetAbsPath)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return nil, fmt.Errorf("gagal membuat direktori penyimpanan: %w", err)
 	}
-
-	// Target absolute file path
-	targetAbsPath := filepath.Join(s.cfg.StorageBasePath, relFilePath)
 	out, err := os.Create(targetAbsPath)
 	if err != nil {
 		return nil, fmt.Errorf("gagal menyimpan berkas: %w", err)
